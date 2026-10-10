@@ -4,6 +4,8 @@ The SDK is imported lazily so replay/test modes do not require credentials or a
 live Claude runtime. The application only depends on the AgentRunner protocol.
 """
 
+import asyncio
+import logging
 from typing import TypeVar
 
 from pydantic import BaseModel
@@ -11,17 +13,23 @@ from pydantic import BaseModel
 from revenue_system.agents.base import AgentRequest
 
 T = TypeVar("T", bound=BaseModel)
+logger = logging.getLogger(__name__)
 
 
 class ClaudeRunner:
-    def __init__(self, model: str | None = None) -> None:
+    def __init__(self, model: str | None = None, timeout_seconds: float = 60.0) -> None:
         self.model = model
+        self.timeout_seconds = timeout_seconds
 
     async def run(self, request: AgentRequest, output_type: type[T]) -> T:
+        return await asyncio.wait_for(self._run(request, output_type), timeout=self.timeout_seconds)
+
+    async def _run(self, request: AgentRequest, output_type: type[T]) -> T:
         try:
             from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ResultMessage  # type: ignore[import-not-found]
         except ImportError as exc:
             raise RuntimeError("claude-agent-sdk is required for live Claude mode") from exc
+        logger.info("Starting Claude agent=%s model=%s", request.agent_name, self.model or "default")
         options = ClaudeAgentOptions(
             model=self.model,
             max_turns=1,
@@ -29,6 +37,7 @@ class ClaudeRunner:
             allowed_tools=[],
         )
         async with ClaudeSDKClient(options=options) as client:
+            logger.info("Claude session connected agent=%s", request.agent_name)
             await client.query(request.task)
             result_text: str | None = None
             async for message in client.receive_response():
