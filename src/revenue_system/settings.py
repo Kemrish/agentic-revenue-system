@@ -18,4 +18,10 @@ class Settings(BaseSettings):
     mail_mode: RuntimeMode = "replay"
     fireflies_mode: RuntimeMode = "replay"
     esign_mode: RuntimeMode = "replay"
+    hubspot_access_token: str = ""
+    mail_api_key: str = ""
+    mail_from_address: str = "demo@example.invalid"
+    fireflies_api_key: str = ""
+    esign_api_key: str = ""
+    esign_base_url: str = "https://api.example.invalid"
 
