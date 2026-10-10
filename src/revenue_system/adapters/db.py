@@ -99,6 +99,19 @@ class SQLiteStore:
         self.connection.execute("INSERT OR IGNORE INTO approvals VALUES (?, ?, ?, ?, 'pending', datetime('now'))", (approval_id, action.deal_id, action.action_type.value, json.dumps(action.payload)))
         self.connection.commit()
 
+    def pending_approvals(self) -> list[sqlite3.Row]:
+        return list(self.connection.execute("SELECT * FROM approvals WHERE status='pending' ORDER BY created_at"))
+
+    def get_approval(self, approval_id: str) -> sqlite3.Row | None:
+        return self.connection.execute("SELECT * FROM approvals WHERE id=?", (approval_id,)).fetchone()
+
+    def pending_outbox(self) -> list[sqlite3.Row]:
+        return list(self.connection.execute("SELECT * FROM outbox WHERE status='pending' ORDER BY created_at"))
+
+    def mark_outbox_sent(self, outbox_id: str) -> None:
+        self.connection.execute("UPDATE outbox SET status='sent' WHERE id=?", (outbox_id,))
+        self.connection.commit()
+
     def add_outbox_once(self, outbox_id: str, action: Action) -> bool:
         try:
             self.connection.execute("INSERT INTO outbox VALUES (?, ?, ?, ?, 'pending', datetime('now'))", (outbox_id, action.action_type.value, action.deal_id, json.dumps(action.payload)))

@@ -16,5 +16,12 @@ class ApprovalService:
         self.store.connection.execute("UPDATE approvals SET status=? WHERE id=?", (status, approval_id))
         self.store.connection.commit()
         self.store.audit("human", f"approval_{status}", approval_id)
+        if approved:
+            row = self.store.get_approval(approval_id)
+            if row:
+                from revenue_system.domain.models import ActionType
+                import json
+                action = Action(ActionType(row["action_type"]), row["deal_id"], json.loads(row["payload"]))
+                self.store.add_outbox_once(f"approved:{approval_id}", action)
         return DomainEvent("approval.decided", f"approval-decision:{approval_id}", {"approval_id": approval_id, "approved": approved})
 
