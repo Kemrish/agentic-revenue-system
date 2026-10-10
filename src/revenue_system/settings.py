@@ -25,4 +25,6 @@ class Settings(BaseSettings):
     esign_api_key: str = ""
     esign_base_url: str = "https://api.example.invalid"
     webhook_secret: str = ""
+    live_side_effects_enabled: bool = False
+    mail_allowed_recipients: str = ""
 
