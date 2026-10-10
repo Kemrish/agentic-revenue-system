@@ -50,7 +50,8 @@ async def run_demo(mode: str = "replay", root: Path = Path(".")) -> list[str]:
         pack = packs.get(deal.segment)
         runner = container.runner if container else FakeRunner()
         draft = await OutreachAgent(runner).draft(deal, pack, ["lesson-measurement"])
-        decision = route_action(store, Action(ActionType.SEND_FIRST_TOUCH, deal.id, {"subject": draft.subject, "body": draft.body}), deal, pack)
+        test_recipient = next((item.strip() for item in (container.settings.mail_allowed_recipients if container else "").split(",") if item.strip()), None)
+        decision = route_action(store, Action(ActionType.SEND_FIRST_TOUCH, deal.id, {"subject": draft.subject, "body": draft.body, **({"recipient": test_recipient} if test_recipient else {})}), deal, pack)
         output.append(f"[{deal.segment}] outreach={decision} lessons={draft.lessons_used}")
 
     triage_runner = container.runner if container else FakeRunner({"reply_triage": {"label": "interested", "confidence": 0.96, "summary": "Requested a meeting"}})

@@ -5,6 +5,7 @@ import asyncio
 from .orchestration.demo_flow import run_demo
 from .container import build_container
 from .governance.approvals import ApprovalService
+from .orchestration.delivery import OutboxDeliveryService
 
 app = typer.Typer(help="Agentic Revenue System CLI")
 
@@ -58,6 +59,15 @@ def approve(approval_id: str) -> None:
 def reject(approval_id: str) -> None:
     event = ApprovalService(build_container().store).decide(approval_id, False)
     typer.echo(f"rejected: {event.payload['approval_id']}")
+
+
+@approvals_app.command("deliver")
+def deliver_approved() -> None:
+    """Deliver approved outbox actions through configured live adapters."""
+    container = build_container()
+    delivered = asyncio.run(OutboxDeliveryService(container.store, container.mail).deliver_pending())
+    for item in delivered:
+        typer.echo(f"delivered: {item}")
 
 
 if __name__ == "__main__":
