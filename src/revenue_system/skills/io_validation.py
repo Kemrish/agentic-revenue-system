@@ -9,10 +9,13 @@ class IOData:
     start_date: date
     end_date: date
     line_items: list[dict[str, float | str]]
+    date_error: str | None = None
 
 
 def validate_io(data: IOData) -> list[str]:
     errors: list[str] = []
+    if data.date_error:
+        errors.append(data.date_error)
     if not data.legal_entity.strip():
         errors.append("legal_entity is required")
     if data.budget <= 0:
