@@ -43,6 +43,13 @@ class SQLiteStore:
                 id INTEGER PRIMARY KEY AUTOINCREMENT, deal_id TEXT, actor TEXT NOT NULL,
                 action TEXT NOT NULL, detail TEXT NOT NULL, created_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS lessons (
+                id TEXT PRIMARY KEY, segment TEXT NOT NULL, statement TEXT NOT NULL,
+                evidence TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'proposed', created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS system_flags (
+                name TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 0
+            );
             """
         )
         self.connection.commit()
@@ -103,4 +110,19 @@ class SQLiteStore:
     def audit(self, actor: str, action: str, detail: str, deal_id: str | None = None) -> None:
         self.connection.execute("INSERT INTO audit_log(deal_id,actor,action,detail,created_at) VALUES(?,?,?,?,datetime('now'))", (deal_id, actor, action, detail))
         self.connection.commit()
+
+    def save_lesson(self, lesson_id: str, segment: str, statement: str, evidence: list[str], status: str = "proposed") -> None:
+        self.connection.execute("INSERT OR REPLACE INTO lessons VALUES (?, ?, ?, ?, ?, datetime('now'))", (lesson_id, segment, statement, json.dumps(evidence), status))
+        self.connection.commit()
+
+    def active_lessons(self, segment: str) -> list[sqlite3.Row]:
+        return list(self.connection.execute("SELECT * FROM lessons WHERE status='active' AND segment IN (?, 'global')", (segment,)))
+
+    def set_flag(self, name: str, enabled: bool) -> None:
+        self.connection.execute("INSERT OR REPLACE INTO system_flags VALUES (?, ?)", (name, int(enabled)))
+        self.connection.commit()
+
+    def flag_enabled(self, name: str) -> bool:
+        row = self.connection.execute("SELECT enabled FROM system_flags WHERE name=?", (name,)).fetchone()
+        return bool(row and row["enabled"])
 

@@ -20,3 +20,8 @@ class LessonService:
     def active_for(self, segment: str) -> list[Lesson]:
         return [lesson for lesson in self._lessons if lesson.status == "active" and lesson.segment in {segment, "global"}]
 
+    def promote(self, lesson_id: str) -> None:
+        for lesson in self._lessons:
+            if lesson.id == lesson_id:
+                lesson.status = "active"
+
