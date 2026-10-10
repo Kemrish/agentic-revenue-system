@@ -26,7 +26,7 @@ class ClaudeRunner:
 
     async def _run(self, request: AgentRequest, output_type: type[T]) -> T:
         try:
-            from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ResultMessage  # type: ignore[import-not-found]
+            from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query  # type: ignore[import-not-found]
         except ImportError as exc:
             raise RuntimeError("claude-agent-sdk is required for live Claude mode") from exc
         logger.info("Starting Claude agent=%s model=%s", request.agent_name, self.model or "default")
@@ -35,18 +35,16 @@ class ClaudeRunner:
             max_turns=1,
             permission_mode="dontAsk",
             allowed_tools=[],
+            output_format={"type": "json_schema", "schema": output_type.model_json_schema()},
         )
-        async with ClaudeSDKClient(options=options) as client:
-            logger.info("Claude session connected agent=%s", request.agent_name)
-            await client.query(request.task)
-            result_text: str | None = None
-            async for message in client.receive_response():
-                if isinstance(message, ResultMessage):
-                    result_text = message.result
-            if not result_text:
-                raise RuntimeError("Claude returned no result")
-            if result_text.startswith("Not logged in"):
-                raise RuntimeError("Claude CLI is not authenticated. Run `claude /login` or the supported Claude CLI login flow before using live mode.")
+        result_text: str | None = None
+        async for message in query(prompt=request.task, options=options):
+            if isinstance(message, ResultMessage):
+                result_text = message.result
+        if not result_text:
+            raise RuntimeError("Claude returned no result")
+        if result_text.startswith("Not logged in"):
+            raise RuntimeError("Claude CLI is not authenticated. Run `claude /login` or the supported Claude CLI login flow before using live mode.")
         try:
             import json
             candidate = result_text.strip()
