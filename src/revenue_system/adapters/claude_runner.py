@@ -36,9 +36,21 @@ class ClaudeRunner:
                     result_text = message.result
             if not result_text:
                 raise RuntimeError("Claude returned no result")
+            if result_text.startswith("Not logged in"):
+                raise RuntimeError("Claude CLI is not authenticated. Run `claude /login` or the supported Claude CLI login flow before using live mode.")
         try:
             import json
-            return output_type.model_validate(json.loads(result_text))
+            candidate = result_text.strip()
+            if candidate.startswith("```"):
+                candidate = candidate.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+            try:
+                payload = json.loads(candidate)
+            except json.JSONDecodeError:
+                start, end = candidate.find("{"), candidate.rfind("}")
+                if start < 0 or end <= start:
+                    raise
+                payload = json.loads(candidate[start:end + 1])
+            return output_type.model_validate(payload)
         except Exception as exc:
             raise ValueError(f"Claude output was not valid {output_type.__name__} JSON") from exc
 
