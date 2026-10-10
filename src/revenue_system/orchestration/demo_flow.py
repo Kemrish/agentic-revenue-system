@@ -57,7 +57,14 @@ async def run_demo(mode: str = "replay", root: Path = Path(".")) -> list[str]:
     digest = await CallIntelligenceAgent(call_runner).digest((root / "fixtures/transcripts/brand-discovery.txt").read_text(encoding="utf-8"), packs.get("brand").qualification_fields)
     output.append(f"[call] fields={len(digest.qualification_fields)} lesson_created={bool(digest.lesson_candidate)}")
 
-    io_draft = await DealDeskAgent(call_runner).draft(digest.qualification_fields | {"legal_entity": "Example Foods"}, packs.get("brand"))
+    io_inputs = digest.qualification_fields | {
+        "legal_entity": "Example Foods",
+        "budget": "250000",
+        "start_date": "2026-11-01",
+        "end_date": "2027-01-31",
+        "line_items": [{"name": "Activate", "amount": 250000}],
+    }
+    io_draft = await DealDeskAgent(call_runner).draft(io_inputs, packs.get("brand"))
     errors = validate_io(io_draft.as_io_data())
     rendered = TemplateRenderer(root / "packs").render("brand/templates/io.md.j2", {**io_draft.model_dump(), "line_items": io_draft.line_items})
     output.append(f"[io] valid={not errors} rendered={len(rendered) > 0}")

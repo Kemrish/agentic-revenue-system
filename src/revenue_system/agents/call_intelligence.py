@@ -19,7 +19,7 @@ class CallIntelligenceAgent:
     async def digest(self, transcript: str, qualification_fields: list[str]) -> CallDigest:
         request = AgentRequest(
             agent_name="call_intelligence",
-            task="Extract only supported qualification fields, objections, next steps, and a concise lesson candidate from this transcript.",
+            task="Extract only supported qualification fields, objections, next steps, and a concise lesson candidate from this transcript. If the transcript contains a reusable buying insight, always populate lesson_candidate; otherwise use null.",
             context={"transcript": wrap_untrusted_content(transcript, "call_transcript"), "qualification_fields": qualification_fields},
         )
         return await self.runner.run(request, CallDigest)

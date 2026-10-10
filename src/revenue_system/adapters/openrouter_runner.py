@@ -20,7 +20,16 @@ class OpenRouterRunner:
         schema = output_type.model_json_schema()
         prompt = f"{request.task}\n\nReturn only JSON matching this schema:\n{json.dumps(schema)}\n\nContext:\n{json.dumps(request.context, default=str)}"
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json", "HTTP-Referer": "https://agentic-revenue-system.local", "X-Title": "Agentic Revenue System"}
-        payload = {"model": self.model, "temperature": 0, "messages": [{"role": "user", "content": prompt}]}
+        payload = {
+            "model": self.model,
+            "temperature": 0,
+            "max_tokens": 1200,
+            "messages": [{"role": "user", "content": prompt}],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {"name": output_type.__name__, "strict": True, "schema": schema},
+            },
+        }
         async with httpx.AsyncClient(timeout=self.timeout_seconds) as client:
             response = await asyncio.wait_for(client.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload), timeout=self.timeout_seconds)
         response.raise_for_status()
