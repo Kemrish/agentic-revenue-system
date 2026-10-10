@@ -20,6 +20,8 @@ class OutboxDeliveryService:
                     if not recipient:
                         raise ValueError("approved mail action is missing recipient")
                     provider_id = await self.mail.send(recipient, payload["subject"], payload["body"], row["id"])
+                elif action_type == ActionType.SEND_CONTRACT:
+                    provider_id = await self.mail.send_for_signature(payload.get("document", ""), row["id"])
                 else:
                     raise ValueError(f"no delivery adapter for action type: {action_type.value}")
                 self.store.mark_outbox_sent(row["id"])
