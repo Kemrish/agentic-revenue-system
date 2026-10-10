@@ -4,7 +4,7 @@ from pathlib import Path
 
 from revenue_system.adapters.db import SQLiteStore
 from revenue_system.agents.call_intelligence import CallIntelligenceAgent
-from revenue_system.agents.deal_desk import DealDeskAgent
+from revenue_system.agents.deal_desk import DealDeskAgent, repair_from_supplied_data
 from revenue_system.agents.execution import FakeRunner
 from revenue_system.agents.outreach import OutreachAgent
 from revenue_system.agents.reply_triage import ReplyTriageAgent
@@ -28,6 +28,13 @@ async def run_demo(mode: str = "replay", root: Path = Path(".")) -> list[str]:
     orchestrator = DealOrchestrator(store, root / "packs")
     leads = json.loads((root / "fixtures/leads.json").read_text(encoding="utf-8"))
     output: list[str] = []
+    if container:
+        output.append(
+            f"[runtime] provider={container.settings.llm_provider} "
+            f"model={container.settings.openrouter_model if container.settings.llm_provider == 'openrouter' else 'claude'} "
+            f"mail={container.settings.mail_mode} esign={container.settings.esign_mode} "
+            f"side_effects={container.settings.live_side_effects_enabled}"
+        )
 
     for lead in leads:
         event = DomainEvent("lead.created", f"fixture:lead:{lead['id']}", {
@@ -65,8 +72,13 @@ async def run_demo(mode: str = "replay", root: Path = Path(".")) -> list[str]:
         "line_items": [{"name": "Activate", "amount": 250000}],
     }
     io_draft = await DealDeskAgent(call_runner).draft(io_inputs, packs.get("brand"))
+    io_draft = repair_from_supplied_data(io_draft, io_inputs)
     errors = validate_io(io_draft.as_io_data())
     rendered = TemplateRenderer(root / "packs").render("brand/templates/io.md.j2", {**io_draft.model_dump(), "line_items": io_draft.line_items})
-    output.append(f"[io] valid={not errors} rendered={len(rendered) > 0}")
+    output.append(f"[io] valid={not errors} rendered={len(rendered) > 0} errors={', '.join(errors) if errors else 'none'}")
+    if container:
+        approvals = container.store.connection.execute("SELECT COUNT(*) FROM approvals WHERE status='pending'").fetchone()[0]
+        outbox = container.store.connection.execute("SELECT COUNT(*) FROM outbox").fetchone()[0]
+        output.append(f"[governance] pending_approvals={approvals} outbox_items={outbox}")
     return output
 

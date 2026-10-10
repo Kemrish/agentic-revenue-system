@@ -39,3 +39,16 @@ class DealDeskAgent:
         )
         return await self.runner.run(request, IODraft)
 
+
+def repair_from_supplied_data(draft: IODraft, supplied: dict) -> IODraft:
+    """Fill only blank model fields from trusted upstream deal data."""
+    updates: dict[str, object] = {}
+    for field in ("legal_entity", "start_date", "end_date"):
+        if not getattr(draft, field) and supplied.get(field):
+            updates[field] = supplied[field]
+    if draft.budget <= 0 and supplied.get("budget"):
+        updates["budget"] = float(supplied["budget"])
+    if not draft.line_items and supplied.get("line_items"):
+        updates["line_items"] = supplied["line_items"]
+    return draft.model_copy(update=updates)
+
