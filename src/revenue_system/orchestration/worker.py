@@ -1,5 +1,6 @@
 from revenue_system.adapters.db import SQLiteStore
 from revenue_system.orchestration.events import DomainEvent
+from revenue_system.orchestration.orchestrator import DealOrchestrator
 
 
 class EventWorker:
@@ -14,4 +15,12 @@ class EventWorker:
 
     def mark_processed(self, event_id: str) -> None:
         self.store.mark_event_processed(event_id)
+
+    def run_once(self, orchestrator: DealOrchestrator) -> int:
+        processed = 0
+        for event in self.pending():
+            orchestrator.handle(event)
+            self.mark_processed(event.event_id)
+            processed += 1
+        return processed
 
