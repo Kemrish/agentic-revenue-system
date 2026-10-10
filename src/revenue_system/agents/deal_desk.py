@@ -41,14 +41,19 @@ class DealDeskAgent:
 
 
 def repair_from_supplied_data(draft: IODraft, supplied: dict) -> IODraft:
-    """Fill only blank model fields from trusted upstream deal data."""
+    """Reconcile the draft against trusted upstream deal data.
+
+    Complete upstream commercial fields are canonical. This prevents a model
+    from changing a budget or line-item total while preserving the agent's
+    mapping role and keeping validation as the final authority.
+    """
     updates: dict[str, object] = {}
     for field in ("legal_entity", "start_date", "end_date"):
         if not getattr(draft, field) and supplied.get(field):
             updates[field] = supplied[field]
-    if draft.budget <= 0 and supplied.get("budget"):
+    if supplied.get("budget") is not None:
         updates["budget"] = float(supplied["budget"])
-    if not draft.line_items and supplied.get("line_items"):
+    if supplied.get("line_items"):
         updates["line_items"] = supplied["line_items"]
     return draft.model_copy(update=updates)
 
