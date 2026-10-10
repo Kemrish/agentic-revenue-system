@@ -16,6 +16,8 @@ The system is a governed modular monolith:
 
 See [the architecture document](docs/architecture.md), [the implementation plan](docs/implementation.md), and [the decision record](docs/decisions.md).
 
+The presentation walkthrough is in [the demo script](docs/demo-script.md).
+
 ## Planned runtime modes
 
 ```text

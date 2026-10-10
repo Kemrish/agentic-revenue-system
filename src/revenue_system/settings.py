@@ -24,4 +24,5 @@ class Settings(BaseSettings):
     fireflies_api_key: str = ""
     esign_api_key: str = ""
     esign_base_url: str = "https://api.example.invalid"
+    webhook_secret: str = ""
 

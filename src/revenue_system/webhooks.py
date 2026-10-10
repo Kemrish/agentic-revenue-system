@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Header, HTTPException, Request
 
+from revenue_system.governance.webhook_security import verify_hmac
+
 from revenue_system.adapters.db import SQLiteStore
 from revenue_system.orchestration.events import DomainEvent
 from revenue_system.orchestration.worker import EventWorker
@@ -10,7 +12,10 @@ _worker = EventWorker(_store)
 
 
 @app.post("/webhooks/hubspot")
-async def hubspot_webhook(request: Request, x_event_id: str | None = Header(default=None)) -> dict[str, str]:
+async def hubspot_webhook(request: Request, x_event_id: str | None = Header(default=None), x_signature: str | None = Header(default=None)) -> dict[str, str]:
+    raw = await request.body()
+    if x_signature and not verify_hmac(raw, x_signature, "demo-webhook-secret"):
+        raise HTTPException(status_code=401, detail="invalid webhook signature")
     body = await request.json()
     event_id = x_event_id or body.get("eventId") or body.get("objectId")
     if not event_id:
@@ -20,7 +25,10 @@ async def hubspot_webhook(request: Request, x_event_id: str | None = Header(defa
 
 
 @app.post("/webhooks/fireflies")
-async def fireflies_webhook(request: Request, x_event_id: str | None = Header(default=None)) -> dict[str, str]:
+async def fireflies_webhook(request: Request, x_event_id: str | None = Header(default=None), x_signature: str | None = Header(default=None)) -> dict[str, str]:
+    raw = await request.body()
+    if x_signature and not verify_hmac(raw, x_signature, "demo-webhook-secret"):
+        raise HTTPException(status_code=401, detail="invalid webhook signature")
     body = await request.json()
     event_id = x_event_id or body.get("transcriptId")
     if not event_id:
