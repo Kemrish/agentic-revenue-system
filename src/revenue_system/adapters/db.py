@@ -12,7 +12,10 @@ from revenue_system.domain.models import Action, Deal, Score, Tier
 class SQLiteStore:
     def __init__(self, url: str = "sqlite:///./revenue_system.db") -> None:
         self.path = url.removeprefix("sqlite:///")
-        self.connection = sqlite3.connect(self.path)
+        # Webhook frameworks may dispatch requests on worker threads. SQLite is
+        # still serialized by the application worker; allow the connection to
+        # be shared for this small local adapter.
+        self.connection = sqlite3.connect(self.path, check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
         self._create_schema()
 
