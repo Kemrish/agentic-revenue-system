@@ -3,13 +3,16 @@
 from dataclasses import dataclass
 
 from .settings import Settings
+from .adapters.db import SQLiteStore
 
 
 @dataclass(frozen=True)
 class Container:
     settings: Settings
+    store: SQLiteStore
 
 
 def build_container(settings: Settings | None = None) -> Container:
-    return Container(settings=settings or Settings())
+    selected = settings or Settings()
+    return Container(settings=selected, store=SQLiteStore(selected.database_url))
 
