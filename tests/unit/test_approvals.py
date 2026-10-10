@@ -9,4 +9,12 @@ def test_approval_decision_creates_resume_event(tmp_path):
     event = service.decide("a1", True)
     assert event.event_type == "approval.decided"
     assert event.payload["approved"] is True
+    assert len(service.store.pending_outbox()) == 1
+
+
+def test_rejected_approval_does_not_create_outbox(tmp_path):
+    service = ApprovalService(SQLiteStore(f"sqlite:///{tmp_path / 'rejected.db'}"))
+    service.request("a1", Action(ActionType.SEND_FIRST_TOUCH, "d1"))
+    service.decide("a1", False)
+    assert service.store.pending_outbox() == []
 

@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     llm_provider: str = "replay"
     openrouter_api_key: str = ""
-    openrouter_model: str = "anthropic/claude-3.5-sonnet"
+    openrouter_model: str = "anthropic/claude-haiku-5.5"
     hubspot_mode: RuntimeMode = "replay"
     mail_mode: RuntimeMode = "replay"
     fireflies_mode: RuntimeMode = "replay"
