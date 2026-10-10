@@ -6,7 +6,7 @@ from .settings import Settings
 from .adapters.db import SQLiteStore
 from .adapters.claude_runner import ClaudeRunner
 from .adapters.openrouter_runner import OpenRouterRunner
-from .adapters.esign import ESignAdapter
+from .adapters.esign import DropboxSignAdapter
 from .adapters.fireflies import FirefliesAdapter
 from .adapters.hubspot import HubSpotAdapter
 from .adapters.mail import MailAdapter
@@ -41,7 +41,7 @@ def build_container(settings: Settings | None = None) -> Container:
             live_side_effects_enabled=selected.live_side_effects_enabled,
         ) if live and selected.mail_mode == "live" else FixtureMailAdapter(),
         transcripts=FirefliesAdapter(selected.fireflies_api_key) if live and selected.fireflies_mode == "live" else FixtureTranscriptAdapter(),
-        esign=ESignAdapter(selected.esign_api_key, selected.esign_base_url, selected.live_side_effects_enabled) if live and selected.esign_mode == "live" else FixtureESignAdapter(),
+        esign=DropboxSignAdapter(selected.esign_api_key, selected.esign_base_url, selected.esign_document_url, selected.esign_signer_email, selected.esign_signer_name, selected.live_side_effects_enabled, selected.esign_test_mode) if live and selected.esign_mode == "live" else FixtureESignAdapter(),
         crm=HubSpotAdapter(selected.hubspot_access_token) if live and selected.hubspot_mode == "live" else None,
     )
 

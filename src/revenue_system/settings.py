@@ -27,7 +27,11 @@ class Settings(BaseSettings):
     mail_from_address: str = "demo@example.invalid"
     fireflies_api_key: str = ""
     esign_api_key: str = ""
-    esign_base_url: str = "https://api.example.invalid"
+    esign_base_url: str = "https://api.hellosign.com"
+    esign_document_url: str = ""
+    esign_signer_email: str = ""
+    esign_signer_name: str = ""
+    esign_test_mode: bool = True
     webhook_secret: str = ""
     live_side_effects_enabled: bool = False
     mail_allowed_recipients: str = ""
