@@ -19,9 +19,26 @@ class ClaudeRunner:
 
     async def run(self, request: AgentRequest, output_type: type[T]) -> T:
         try:
-            from claude_agent_sdk import query  # type: ignore[import-not-found]
+            from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient, ResultMessage  # type: ignore[import-not-found]
         except ImportError as exc:
             raise RuntimeError("claude-agent-sdk is required for live Claude mode") from exc
-        del query
-        raise NotImplementedError("Claude SDK message mapping will be enabled in the live integration slice")
+        options = ClaudeAgentOptions(
+            model=self.model,
+            max_turns=1,
+            permission_mode="dontAsk",
+            allowed_tools=[],
+        )
+        async with ClaudeSDKClient(options=options) as client:
+            await client.query(request.task)
+            result_text: str | None = None
+            async for message in client.receive_response():
+                if isinstance(message, ResultMessage):
+                    result_text = message.result
+            if not result_text:
+                raise RuntimeError("Claude returned no result")
+        try:
+            import json
+            return output_type.model_validate(json.loads(result_text))
+        except Exception as exc:
+            raise ValueError(f"Claude output was not valid {output_type.__name__} JSON") from exc
 
