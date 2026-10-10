@@ -2,10 +2,12 @@
 
 import typer
 import asyncio
+from pathlib import Path
 from .orchestration.demo_flow import run_demo
 from .container import build_container
 from .governance.approvals import ApprovalService
 from .orchestration.delivery import OutboxDeliveryService
+from .segments.registry import PackRegistry
 
 app = typer.Typer(help="Agentic Revenue System CLI")
 
@@ -20,7 +22,10 @@ def demo(mode: str = typer.Option("replay", help="live, record, replay, or test"
 @app.command("validate-packs")
 def validate_packs() -> None:
     """Validate all configured segment packs."""
-    typer.echo("Pack validation scaffolded")
+    packs = PackRegistry(Path("packs"))
+    for pack in packs.all():
+        typer.echo(f"valid: {pack.segment}")
+    typer.echo(f"validated {len(packs.all())} segment packs")
 
 
 @app.command()

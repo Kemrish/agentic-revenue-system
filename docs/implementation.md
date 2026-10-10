@@ -74,6 +74,7 @@ python -m revenue_system.cli ingest lead --file fixtures/leads.json
 python -m revenue_system.cli run
 python -m revenue_system.cli approvals list
 python -m revenue_system.cli approvals approve <approval-id>
+python -m revenue_system.cli approvals deliver
 python -m revenue_system.cli kill-switch on
 python -m revenue_system.cli demo --mode replay
 python -m pytest
