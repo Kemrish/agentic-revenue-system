@@ -1,0 +1,28 @@
+segment: publisher
+display_name: Publishers
+scoring:
+  weights:
+    fit: 0.5
+    intent: 0.3
+    engagement: 0.2
+  tiers:
+    A: 75
+    B: 50
+  fit_gate_for_a: 40
+qualification_fields:
+  - decision_maker
+  - monthly_impressions
+  - current_ssp
+messaging:
+  products: [Activate.SSP, Optimize]
+  pillars: [yield improvement, premium demand, brand safety]
+templates:
+  first_touch: templates/first_touch.md.j2
+  follow_up: templates/follow_up.md.j2
+  contract: templates/supply_agreement.md.j2
+autonomy:
+  require_approval:
+    - first_touch_tier_a
+    - pricing
+    - contract_send
+

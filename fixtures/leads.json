@@ -1,0 +1,22 @@
+[
+  {
+    "id": "lead-brand-001",
+    "segment": "brand",
+    "company_name": "Example Foods",
+    "contact_name": "Amina Hassan",
+    "employee_count": 420,
+    "locations": 140,
+    "signals": ["hiring local marketing director", "pricing page visit"]
+  },
+  {
+    "id": "lead-publisher-001",
+    "segment": "publisher",
+    "company_name": "Example Media Network",
+    "contact_name": "Daniel Bekele",
+    "employee_count": 180,
+    "monthly_impressions": 75000000,
+    "inventory_types": ["display", "ctv"],
+    "signals": ["evaluating current ssp"]
+  }
+]
+
