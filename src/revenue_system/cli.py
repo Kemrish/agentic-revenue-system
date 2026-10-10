@@ -1,6 +1,8 @@
 """Command-line entry point; workflow commands will be added in the next slice."""
 
 import typer
+import asyncio
+from .orchestration.demo_flow import run_demo
 
 app = typer.Typer(help="Agentic Revenue System CLI")
 
@@ -8,7 +10,8 @@ app = typer.Typer(help="Agentic Revenue System CLI")
 @app.command()
 def demo(mode: str = typer.Option("replay", help="live, record, replay, or test")) -> None:
     """Run the end-to-end demonstration."""
-    typer.echo(f"Demo runner scaffolded; selected mode: {mode}")
+    for line in asyncio.run(run_demo(mode)):
+        typer.echo(line)
 
 
 @app.command("validate-packs")
