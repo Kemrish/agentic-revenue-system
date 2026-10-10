@@ -1,4 +1,5 @@
 import json
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 
@@ -18,10 +19,14 @@ class MailAdapter:
         request = Request(
             f"{self.base_url}/emails",
             data=json.dumps({"from": self.from_address, "to": [recipient], "subject": subject, "text": body}).encode(),
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json", "Idempotency-Key": idempotency_key},
+            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json", "Idempotency-Key": idempotency_key, "User-Agent": "agentic-revenue-system/0.1"},
             method="POST",
         )
-        with urlopen(request, timeout=15) as response:
-            payload = json.loads(response.read())
+        try:
+            with urlopen(request, timeout=15) as response:
+                payload = json.loads(response.read())
+        except HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[:500]
+            raise RuntimeError(f"Mail provider rejected request ({exc.code}): {detail}") from exc
         return str(payload.get("id", idempotency_key))
 
