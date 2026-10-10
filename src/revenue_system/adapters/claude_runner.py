@@ -17,9 +17,10 @@ logger = logging.getLogger(__name__)
 
 
 class ClaudeRunner:
-    def __init__(self, model: str | None = None, timeout_seconds: float = 60.0) -> None:
+    def __init__(self, model: str | None = None, timeout_seconds: float = 60.0, api_key: str | None = None) -> None:
         self.model = model
         self.timeout_seconds = timeout_seconds
+        self.api_key = api_key
 
     async def run(self, request: AgentRequest, output_type: type[T]) -> T:
         return await asyncio.wait_for(self._run(request, output_type), timeout=self.timeout_seconds)
@@ -36,6 +37,7 @@ class ClaudeRunner:
             permission_mode="dontAsk",
             allowed_tools=[],
             output_format={"type": "json_schema", "schema": output_type.model_json_schema()},
+            env={"ANTHROPIC_API_KEY": self.api_key} if self.api_key else {},
         )
         result_text: str | None = None
         async for message in query(prompt=request.task, options=options):

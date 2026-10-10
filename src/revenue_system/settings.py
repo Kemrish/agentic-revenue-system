@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     runtime_mode: RuntimeMode = "replay"
     database_url: str = "sqlite:///./revenue_system.db"
     claude_mode: RuntimeMode = "replay"
+    anthropic_api_key: str = ""
     hubspot_mode: RuntimeMode = "replay"
     mail_mode: RuntimeMode = "replay"
     fireflies_mode: RuntimeMode = "replay"

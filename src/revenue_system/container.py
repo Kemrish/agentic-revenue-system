@@ -32,7 +32,7 @@ def build_container(settings: Settings | None = None) -> Container:
     return Container(
         settings=selected,
         store=SQLiteStore(selected.database_url),
-        runner=ClaudeRunner() if live and selected.claude_mode == "live" else ReplayRunner({}),
+        runner=ClaudeRunner(api_key=selected.anthropic_api_key) if live and selected.claude_mode == "live" else ReplayRunner({}),
         mail=MailAdapter(
             selected.mail_api_key,
             selected.mail_from_address,
