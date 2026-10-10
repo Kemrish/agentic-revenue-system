@@ -24,7 +24,7 @@ class DealOrchestrator:
     def _create_and_score(self, event: DomainEvent) -> Deal:
         payload = event.payload
         deal = Deal(
-            id=payload.get("deal_id", payload["lead_id"]),
+            id=payload.get("deal_id") or payload.get("lead_id") or payload["id"],
             segment=payload["segment"],
             company_name=payload["company_name"],
             contact_name=payload["contact_name"],
