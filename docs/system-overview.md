@@ -10,6 +10,16 @@ The Agentic Revenue System is an AI-assisted revenue operations platform. It sup
 
 The governing principle is: **AI proposes; deterministic software validates and governs; humans approve high-impact actions; adapters perform external side effects; audit records what happened.**
 
+## What is an “Agentic” system? — The concept
+
+An agentic system can observe a business situation, reason about the next useful step, propose an action, and continue a workflow toward an objective. Unlike a fixed automation rule, it can interpret context and select an appropriate next step.
+
+In this project, agentic does not mean uncontrolled autonomy. Agents reason and propose; deterministic software controls state, policy, validation, approvals, delivery, and audit.
+
+```text
+Observe → Understand → Propose → Govern → Approve → Execute → Learn
+```
+
 ## End-to-end execution
 
 1. A lead enters through a CRM, import, webhook, or fixture. The current demo uses `fixtures/leads.json`; the system does not yet autonomously discover leads from the open internet.
@@ -41,6 +51,45 @@ External source → durable event → orchestrator → agent or skill
 ```
 
 The project is a governed modular monolith. It avoids unnecessary microservices while keeping domain, orchestration, governance, agents, skills, segments, and adapters separate.
+
+### The Brain — The reasoning engine
+
+The Brain is the collection of typed agents and the orchestrator. Agents handle judgment-heavy work: research, outreach drafting, reply classification, prompt-injection detection, call analysis, IO drafting, and pipeline analysis.
+
+The orchestrator selects the agent, supplies context, validates its typed result, and passes it to governance. An agent can propose a message or contract field, but it cannot directly send the message or issue the contract.
+
+### The Memory — The knowledge base
+
+The Memory has several layers:
+
+- operational memory: SQLite records deals, events, approvals, outbox work, audit, lessons, and flags;
+- business memory: deal stage, fields, score, segment, and timestamps;
+- learning memory: reusable lessons extracted from calls and replies;
+- configuration memory: YAML segment packs and templates;
+- replay memory: fixtures and recorded responses for repeatable demos.
+
+Durable memory ensures a process restart does not lose an approval, pending delivery, or audit record.
+
+### The Hands — Tools and integrations
+
+The Hands are provider adapters for HubSpot, Resend, Fireflies, Dropbox Sign, OpenRouter, and the Claude Agent SDK. The delivery layer invokes an adapter through a stable boundary; the adapter translates that action into provider-specific authentication and API calls.
+
+This keeps providers replaceable. Resend could later be replaced by another email provider without changing the Outreach Agent or Policy Engine.
+
+### The Rulebook — Guardrails and governance
+
+The Rulebook is deterministic application code containing policy decisions, stage guards, scoring thresholds, IO validation, approvals, allowlists, side-effect switches, prompt-injection handling, idempotency, and audit requirements.
+
+Examples include:
+
+```text
+Tier-A first touch → REQUIRE_APPROVAL
+Contract action → REQUIRE_APPROVAL
+Missing recipient → delivery failure
+Prompt injection → suspicious classification
+Side effects disabled → provider call blocked
+Duplicate action key → no duplicate delivery
+```
 
 ## Lead intake and classification
 
@@ -163,3 +212,96 @@ python -m revenue_system.cli audit <deal-id>
 python -m revenue_system.cli kill-switch --enabled
 python -m pytest -q
 ```
+
+## Operational workflow — a real-world example
+
+Assume a brand lead arrives from the CRM with strong fit, a pricing-page visit, and an active marketing hiring signal.
+
+1. The CRM event is normalized as `lead.created`.
+2. The orchestrator stores the lead and loads the brand pack.
+3. The scoring skill calculates fit, intent, engagement, total score, and Tier A.
+4. The Outreach Agent drafts a personalized first-touch email using relevant lessons.
+5. The Policy Engine returns `REQUIRE_APPROVAL` for a Tier-A first touch.
+6. The draft is stored in the approval queue; no email is sent.
+7. A revenue operator reviews the subject, body, recipient, and evidence.
+8. Approval creates an outbox item with a unique delivery key.
+9. The delivery worker calls Resend, restricted to the configured recipient allowlist.
+10. Resend returns a provider message ID.
+11. The outbox row is marked sent and the provider ID is written to the audit log.
+12. Reply Triage classifies the response, and Call Intelligence later extracts qualification fields and lessons.
+13. Deal Desk maps trusted terms into an IO and validates budget, dates, and line-item arithmetic.
+14. A contract action requires approval again before Dropbox Sign test-mode request creation.
+
+This demonstrates the boundary between intelligence and execution: the agent creates useful work, but the system controls when and how that work affects the outside world.
+
+## Governance, risk, and compliance
+
+### Human oversight
+
+High-impact actions are approval-gated before customer contact, commercial changes, or signature requests.
+
+### Data integrity
+
+Typed schemas, deterministic validation, idempotency keys, and durable transactions reduce malformed data and duplicate actions.
+
+### Prompt-injection resistance
+
+Email and transcript content is treated as untrusted data. It cannot change system instructions, grant itself tools, bypass approval, or send a contract.
+
+### Commercial protection
+
+Budget, dates, line items, pricing, and contract actions are validated and approval-gated. The IO repair layer only reconciles fields against trusted upstream data; it cannot invent commercial terms.
+
+### Access and side-effect control
+
+Live email requires an explicit recipient allowlist and `LIVE_SIDE_EFFECTS_ENABLED=true`. E-signature has the same explicit gate. Replay and test modes prevent accidental provider calls during development.
+
+### Auditability
+
+The audit log records scoring, policy decisions, approvals, provider IDs, delivery success, and failures. This gives operators a chronological explanation of what happened.
+
+### Compliance posture
+
+The project provides technical controls supporting reviewability and controlled operations. It is not a complete legal compliance program. Production deployment still requires policies for retention, access control, privacy, vendor agreements, incident response, and regulatory obligations.
+
+## Summary of benefits
+
+- **Higher productivity:** agents draft and summarize work that would otherwise be manual.
+- **Consistent qualification:** deterministic scoring applies the same rules to every lead.
+- **Segment flexibility:** YAML packs support different segments without duplicated code.
+- **Safer autonomy:** low-risk work can be automated while high-impact actions require approval.
+- **Provider independence:** adapters isolate vendor-specific details.
+- **Operational resilience:** durable events and outbox records survive retries and restarts.
+- **Continuous learning:** conversation lessons can improve future outreach.
+- **Explainability:** scores, policies, approvals, provider responses, and failures are auditable.
+- **Demo reliability:** replay mode makes the workflow reproducible without network access.
+
+## Next steps
+
+### Immediate demonstration
+
+1. Validate packs.
+2. Run the replay demo.
+3. Run live OpenRouter with side effects disabled.
+4. Review and approve only the allowlisted test action.
+5. Run outbox delivery and inspect the audit record.
+6. Demonstrate Dropbox Sign test mode without a paid plan.
+
+### Near-term engineering
+
+1. Add a web dashboard for approvals, audit, and outbox status.
+2. Add real CRM sandbox integration tests.
+3. Add Fireflies retrieval and signed webhook verification.
+4. Add provider retry, rate-limit, and health-check handling.
+5. Remove the remaining serializer warning from malformed test fixtures.
+6. Add monitoring and operational metrics.
+
+### Production scale
+
+1. Replace SQLite with PostgreSQL.
+2. Run durable workers separately from the CLI process.
+3. Add a secrets manager and key rotation.
+4. Configure signed webhooks and replay protection.
+5. Add backups, alerting, metrics, and incident procedures.
+6. Establish retention and privacy policies.
+7. Obtain an approved paid e-signature plan before real signer notifications are enabled.
