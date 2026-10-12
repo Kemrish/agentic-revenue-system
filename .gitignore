@@ -8,6 +8,7 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+docs/*.pdf
 .coverage
 htmlcov/
 
