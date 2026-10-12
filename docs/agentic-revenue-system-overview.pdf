@@ -116,7 +116,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 4 0 R >>
 endobj
 6 0 obj
-<< /Length 2575 >>
+<< /Length 2661 >>
 stream
 BT
 /F1 9.5 Tf
@@ -189,6 +189,12 @@ BT
 0 -15 Td
 () Tj
 0 -15 Td
+(Visual architecture diagram: [SVG]\(architecture-diagram.svg\) · [editable Mermaid) Tj
+0 -15 Td
+(source]\(architecture-diagram.mmd\)) Tj
+0 -15 Td
+() Tj
+0 -15 Td
 () Tj
 0 -15 Td
 (THE BRAIN ? THE REASONING ENGINE) Tj
@@ -210,12 +216,6 @@ BT
 (passes it to governance. An agent can propose a message or contract field, but it cannot) Tj
 0 -15 Td
 (directly send the message or issue the contract.) Tj
-0 -15 Td
-() Tj
-0 -15 Td
-() Tj
-0 -15 Td
-(THE MEMORY ? THE KNOWLEDGE BASE) Tj
 ET
 endstream
 endobj
@@ -223,11 +223,17 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 6 0 R >>
 endobj
 8 0 obj
-<< /Length 2240 >>
+<< /Length 2241 >>
 stream
 BT
 /F1 9.5 Tf
 50 750 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(THE MEMORY ? THE KNOWLEDGE BASE) Tj
+0 -15 Td
 () Tj
 0 -15 Td
 () Tj
@@ -317,12 +323,6 @@ BT
 () Tj
 0 -15 Td
 () Tj
-0 -15 Td
-(LEAD INTAKE AND CLASSIFICATION) Tj
-0 -15 Td
-() Tj
-0 -15 Td
-() Tj
 ET
 endstream
 endobj
@@ -330,11 +330,17 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 8 0 R >>
 endobj
 10 0 obj
-<< /Length 2611 >>
+<< /Length 2604 >>
 stream
 BT
 /F1 9.5 Tf
 50 750 Td
+(LEAD INTAKE AND CLASSIFICATION) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
 (The lead comes into the system from an external source. In the demo, fixture records) Tj
 0 -15 Td
 (simulate this source. A future CRM or prospecting connector can emit the same normalized) Tj
@@ -424,12 +430,6 @@ BT
 (concurrent workers, and high availability.) Tj
 0 -15 Td
 () Tj
-0 -15 Td
-() Tj
-0 -15 Td
-(WHY AGENTS DO NOT DIRECTLY SEND EMAIL) Tj
-0 -15 Td
-() Tj
 ET
 endstream
 endobj
@@ -437,11 +437,17 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 10 0 R >>
 endobj
 12 0 obj
-<< /Length 2027 >>
+<< /Length 1920 >>
 stream
 BT
 /F1 9.5 Tf
 50 750 Td
+() Tj
+0 -15 Td
+(WHY AGENTS DO NOT DIRECTLY SEND EMAIL) Tj
+0 -15 Td
+() Tj
+0 -15 Td
 () Tj
 0 -15 Td
 (Agents are responsible for interpretation and proposal generation, not business side) Tj
@@ -531,12 +537,6 @@ BT
 (Agents handle outreach, reply triage, call intelligence, deal desk/IO drafting, research) Tj
 0 -15 Td
 (boundaries, and pipeline analysis. They return typed Pydantic models.) Tj
-0 -15 Td
-() Tj
-0 -15 Td
-(Deterministic skills handle scoring, policy, state transitions, IO validation,) Tj
-0 -15 Td
-(templates, tracking, lessons, and idempotency-sensitive decisions.) Tj
 ET
 endstream
 endobj
@@ -544,11 +544,17 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 12 0 R >>
 endobj
 14 0 obj
-<< /Length 2144 >>
+<< /Length 2163 >>
 stream
 BT
 /F1 9.5 Tf
 50 750 Td
+() Tj
+0 -15 Td
+(Deterministic skills handle scoring, policy, state transitions, IO validation,) Tj
+0 -15 Td
+(templates, tracking, lessons, and idempotency-sensitive decisions.) Tj
+0 -15 Td
 () Tj
 0 -15 Td
 () Tj
@@ -638,12 +644,6 @@ BT
 (The project has verified 37 passing tests, both segment packs, live OpenRouter) Tj
 0 -15 Td
 (execution, real allowlisted Resend delivery, approval and rejection, approved outbox) Tj
-0 -15 Td
-(delivery, audit provider IDs, prompt-injection handling, deterministic IO repair, and) Tj
-0 -15 Td
-(Dropbox Sign test-mode request creation.) Tj
-0 -15 Td
-() Tj
 ET
 endstream
 endobj
@@ -651,11 +651,17 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 14 0 R >>
 endobj
 16 0 obj
-<< /Length 2428 >>
+<< /Length 2230 >>
 stream
 BT
 /F1 9.5 Tf
 50 750 Td
+(delivery, audit provider IDs, prompt-injection handling, deterministic IO repair, and) Tj
+0 -15 Td
+(Dropbox Sign test-mode request creation.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
 () Tj
 0 -15 Td
 (DROPBOX SIGN WITHOUT A PAID PLAN) Tj
@@ -732,6 +738,12 @@ BT
 0 -15 Td
 () Tj
 0 -15 Td
+(Visual working-operation flow: [SVG]\(workflow-diagram.svg\) · [editable Mermaid) Tj
+0 -15 Td
+(source]\(workflow-diagram.mmd\)) Tj
+0 -15 Td
+() Tj
+0 -15 Td
 (Assume a brand lead arrives from the CRM with strong fit, a pricing-page visit, and an) Tj
 0 -15 Td
 (active marketing hiring signal.) Tj
@@ -739,7 +751,18 @@ BT
 () Tj
 0 -15 Td
 (1. The CRM event is normalized as lead.created.) Tj
-0 -15 Td
+ET
+endstream
+endobj
+17 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 16 0 R >>
+endobj
+18 0 obj
+<< /Length 2405 >>
+stream
+BT
+/F1 9.5 Tf
+50 750 Td
 (2. The orchestrator stores the lead and loads the brand pack.) Tj
 0 -15 Td
 (3. The scoring skill calculates fit, intent, engagement, total score, and Tier A.) Tj
@@ -751,18 +774,7 @@ BT
 (6. The draft is stored in the approval queue; no email is sent.) Tj
 0 -15 Td
 (7. A revenue operator reviews the subject, body, recipient, and evidence.) Tj
-ET
-endstream
-endobj
-17 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 16 0 R >>
-endobj
-18 0 obj
-<< /Length 2169 >>
-stream
-BT
-/F1 9.5 Tf
-50 750 Td
+0 -15 Td
 (8. Approval creates an outbox item with a unique delivery key.) Tj
 0 -15 Td
 (9. The delivery worker calls Resend, restricted to the configured recipient allowlist.) Tj
@@ -846,7 +858,18 @@ BT
 (COMMERCIAL PROTECTION) Tj
 0 -15 Td
 () Tj
-0 -15 Td
+ET
+endstream
+endobj
+19 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 18 0 R >>
+endobj
+20 0 obj
+<< /Length 2440 >>
+stream
+BT
+/F1 9.5 Tf
+50 750 Td
 () Tj
 0 -15 Td
 (Budget, dates, line items, pricing, and contract actions are validated and approval-) Tj
@@ -858,18 +881,7 @@ BT
 () Tj
 0 -15 Td
 () Tj
-ET
-endstream
-endobj
-19 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 18 0 R >>
-endobj
-20 0 obj
-<< /Length 2306 >>
-stream
-BT
-/F1 9.5 Tf
-50 750 Td
+0 -15 Td
 (ACCESS AND SIDE-EFFECT CONTROL) Tj
 0 -15 Td
 () Tj
@@ -953,7 +965,18 @@ BT
 () Tj
 0 -15 Td
 () Tj
-0 -15 Td
+ET
+endstream
+endobj
+21 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 20 0 R >>
+endobj
+22 0 obj
+<< /Length 1555 >>
+stream
+BT
+/F1 9.5 Tf
+50 750 Td
 () Tj
 0 -15 Td
 (IMMEDIATE DEMONSTRATION) Tj
@@ -965,18 +988,7 @@ BT
 (1. Validate packs.) Tj
 0 -15 Td
 (2. Run the replay demo.) Tj
-ET
-endstream
-endobj
-21 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 20 0 R >>
-endobj
-22 0 obj
-<< /Length 1401 >>
-stream
-BT
-/F1 9.5 Tf
-50 750 Td
+0 -15 Td
 (3. Run live OpenRouter with side effects disabled.) Tj
 0 -15 Td
 (4. Review and approve only the allowlisted test action.) Tj
@@ -1047,25 +1059,25 @@ xref
 0000000247 00000 n 
 0000002454 00000 n 
 0000002580 00000 n 
-0000005207 00000 n 
-0000005333 00000 n 
-0000007625 00000 n 
-0000007751 00000 n 
-0000010415 00000 n 
-0000010543 00000 n 
-0000012623 00000 n 
-0000012751 00000 n 
-0000014948 00000 n 
-0000015076 00000 n 
-0000017557 00000 n 
-0000017685 00000 n 
-0000019907 00000 n 
-0000020035 00000 n 
-0000022394 00000 n 
-0000022522 00000 n 
-0000023976 00000 n 
+0000005293 00000 n 
+0000005419 00000 n 
+0000007712 00000 n 
+0000007838 00000 n 
+0000010495 00000 n 
+0000010623 00000 n 
+0000012596 00000 n 
+0000012724 00000 n 
+0000014940 00000 n 
+0000015068 00000 n 
+0000017351 00000 n 
+0000017479 00000 n 
+0000019937 00000 n 
+0000020065 00000 n 
+0000022558 00000 n 
+0000022686 00000 n 
+0000024294 00000 n 
 trailer
 << /Size 24 /Root 1 0 R >>
 startxref
-24104
+24422
 %%EOF

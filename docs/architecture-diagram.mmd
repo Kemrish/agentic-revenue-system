@@ -1,0 +1,19 @@
+flowchart TB
+    Sources[CRM / Imports / Webhooks / Fixtures] --> Events[Durable Domain Events]
+    Events --> Store[(Operational Store<br/>SQLite / PostgreSQL target)]
+    Store --> Orchestrator[Orchestrator<br/>State + Transitions]
+    Orchestrator --> Agents[Agents<br/>Research · Outreach · Triage · Calls · Deal Desk]
+    Orchestrator --> Skills[Deterministic Skills<br/>Scoring · Validation · Templates · Lessons]
+    Agents --> Typed[Typed Proposal]
+    Skills --> Typed
+    Typed --> Policy[Policy Engine<br/>AUTO · REQUIRE_APPROVAL · DENY]
+    Policy --> Outbox[Outbox]
+    Policy --> Approvals[Human Approval Queue]
+    Approvals --> Outbox
+    Policy --> Audit[Audit Log]
+    Outbox --> Adapters[Provider Adapters]
+    Adapters --> CRM[HubSpot]
+    Adapters --> Mail[Resend]
+    Adapters --> Transcript[Fireflies]
+    Adapters --> ESign[Dropbox Sign]
+    Adapters --> Audit

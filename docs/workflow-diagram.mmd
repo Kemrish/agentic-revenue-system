@@ -1,0 +1,21 @@
+flowchart LR
+    A[Lead arrives] --> B[Create lead.created event]
+    B --> C[Persist deal]
+    C --> D[Load segment pack]
+    D --> E[Deterministic scoring]
+    E --> F[Agent proposes outreach]
+    F --> G{Policy decision}
+    G -->|DENY| H[Block + audit]
+    G -->|AUTO| I[Create outbox item]
+    G -->|REQUIRE_APPROVAL| J[Human reviews]
+    J -->|Reject| H
+    J -->|Approve| I
+    I --> K[Delivery worker]
+    K --> L{Provider}
+    L --> M[Resend email]
+    L --> N[Dropbox Sign test request]
+    M --> O[Provider ID + audit]
+    N --> O
+    O --> P[Reply / transcript received]
+    P --> Q[Classify + extract lessons]
+    Q --> R[Update deal and future context]

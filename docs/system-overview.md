@@ -52,6 +52,8 @@ External source → durable event → orchestrator → agent or skill
 
 The project is a governed modular monolith. It avoids unnecessary microservices while keeping domain, orchestration, governance, agents, skills, segments, and adapters separate.
 
+Visual architecture diagram: [SVG](architecture-diagram.svg) · [editable Mermaid source](architecture-diagram.mmd)
+
 ### The Brain — The reasoning engine
 
 The Brain is the collection of typed agents and the orchestrator. Agents handle judgment-heavy work: research, outreach drafting, reply classification, prompt-injection detection, call analysis, IO drafting, and pipeline analysis.
@@ -214,6 +216,8 @@ python -m pytest -q
 ```
 
 ## Operational workflow — a real-world example
+
+Visual working-operation flow: [SVG](workflow-diagram.svg) · [editable Mermaid source](workflow-diagram.mmd)
 
 Assume a brand lead arrives from the CRM with strong fit, a pricing-page visit, and an active marketing hiring signal.
 
