@@ -1,0 +1,593 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [5 0 R 7 0 R 9 0 R 11 0 R 13 0 R 15 0 R] /Count 6 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Length 2326 >>
+stream
+BT
+/F1 9.5 Tf
+50 750 Td
+() Tj
+0 -15 Td
+(AGENTIC REVENUE SYSTEM) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(EXECUTIVE AND TECHNICAL OVERVIEW) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Prepared: October 12, 2026) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(EXECUTIVE SUMMARY) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(The Agentic Revenue System is an AI-assisted revenue operations platform. It supports) Tj
+0 -15 Td
+(the lifecycle from lead intake and qualification through scoring, outreach, reply) Tj
+0 -15 Td
+(handling, call intelligence, IO generation, human approval, external delivery, signature) Tj
+0 -15 Td
+(workflow, and audit.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(The governing principle is: AI proposes; deterministic software validates and governs;) Tj
+0 -15 Td
+(humans approve high-impact actions; adapters perform external side effects; audit) Tj
+0 -15 Td
+(records what happened.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(END-TO-END EXECUTION) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(1. A lead enters through a CRM, import, webhook, or fixture. The current demo uses) Tj
+0 -15 Td
+(fixtures/leads.json; the system does not yet autonomously discover leads from the open) Tj
+0 -15 Td
+(internet.) Tj
+0 -15 Td
+(2. The lead becomes a durable lead.created event with an idempotency key.) Tj
+0 -15 Td
+(3. The orchestrator creates or updates a deal in SQLite.) Tj
+0 -15 Td
+(4. The segment registry loads the brand or publisher pack.) Tj
+0 -15 Td
+(5. The deterministic scoring skill calculates fit, intent, engagement, total score,) Tj
+0 -15 Td
+(tier, explanation, and fired rules.) Tj
+0 -15 Td
+(6. An agent produces a typed proposal such as an outreach draft, reply classification,) Tj
+0 -15 Td
+(transcript digest, or IO draft.) Tj
+0 -15 Td
+(7. The policy engine classifies the action as AUTO, REQUIRE_APPROVAL, or DENY.) Tj
+0 -15 Td
+(8. High-impact actions enter the approval queue.) Tj
+0 -15 Td
+(9. A human approves or rejects the action.) Tj
+0 -15 Td
+(10. Approved actions enter the durable outbox.) Tj
+0 -15 Td
+(11. The delivery service selects the provider adapter and performs the external action.) Tj
+0 -15 Td
+(12. The action is marked sent only after provider success; the provider ID and result) Tj
+0 -15 Td
+(are audited.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(ARCHITECTURE) Tj
+0 -15 Td
+() Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 4 0 R >>
+endobj
+6 0 obj
+<< /Length 2516 >>
+stream
+BT
+/F1 9.5 Tf
+50 750 Td
+() Tj
+0 -15 Td
+(text) Tj
+0 -15 Td
+(External source ? durable event ? orchestrator ? agent or skill) Tj
+0 -15 Td
+(                                      ?) Tj
+0 -15 Td
+(                               typed proposal) Tj
+0 -15 Td
+(                                      ?) Tj
+0 -15 Td
+(                             policy engine) Tj
+0 -15 Td
+(                         AUTO / APPROVAL / DENY) Tj
+0 -15 Td
+(                                      ?) Tj
+0 -15 Td
+(                              outbox or audit) Tj
+0 -15 Td
+(                                      ?) Tj
+0 -15 Td
+(                              provider adapter) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(The project is a governed modular monolith. It avoids unnecessary microservices while) Tj
+0 -15 Td
+(keeping domain, orchestration, governance, agents, skills, segments, and adapters) Tj
+0 -15 Td
+(separate.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(LEAD INTAKE AND CLASSIFICATION) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(The lead comes into the system from an external source. In the demo, fixture records) Tj
+0 -15 Td
+(simulate this source. A future CRM or prospecting connector can emit the same normalized) Tj
+0 -15 Td
+(event.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Classification uses deterministic business inputs such as company fit, employee count,) Tj
+0 -15 Td
+(locations, buying signals, pricing-page activity, monthly impressions, inventory types,) Tj
+0 -15 Td
+(and engagement. The segment pack supplies segment-specific fields and guidance.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Scoring is implemented in src/revenue_system/skills/scoring.py. The orchestrator applies) Tj
+0 -15 Td
+(it, and src/revenue_system/domain/models.py stores the resulting Score.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Scoring answers: How qualified or valuable is this lead?) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Policy answers: What is the system allowed to do with this lead?) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(The LLM is not the final scoring authority. Delegating scoring entirely to an LLM would) Tj
+0 -15 Td
+(make results less repeatable, harder to explain and test, and more vulnerable to prompt) Tj
+0 -15 Td
+(injection. The LLM may interpret unstructured context, but application code calculates) Tj
+0 -15 Td
+(the final score and tier.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(SEGMENT PACKS) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(A segment pack is a configuration package for one business segment. Current packs are) Tj
+0 -15 Td
+(packs/brand/ and packs/publisher/.) Tj
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 6 0 R >>
+endobj
+8 0 obj
+<< /Length 2131 >>
+stream
+BT
+/F1 9.5 Tf
+50 750 Td
+() Tj
+0 -15 Td
+(Packs can define qualification fields, messaging guidance, scoring inputs, and) Tj
+0 -15 Td
+(templates. The same agents and orchestrator serve both segments. Adding a segment should) Tj
+0 -15 Td
+(normally require a new pack rather than copied application logic.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Pack loading and validation are implemented in src/revenue_system/segments/registry.py) Tj
+0 -15 Td
+(and schema.py.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(DURABLE STATE) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(The workflow does not depend on in-memory state. SQLite stores deals, events, approvals,) Tj
+0 -15 Td
+(outbox records, audit records, lessons, and system flags. This protects the workflow) Tj
+0 -15 Td
+(from restarts, crashes, deployments, retries, and duplicate webhooks.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(SQLite is appropriate for this demo. PostgreSQL is recommended for production scale,) Tj
+0 -15 Td
+(concurrent workers, and high availability.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(WHY AGENTS DO NOT DIRECTLY SEND EMAIL) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Agents are responsible for interpretation and proposal generation, not business side) Tj
+0 -15 Td
+(effects. They do not directly send email, change CRM data, change pricing, or send) Tj
+0 -15 Td
+(contracts.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(This separation provides human approval, deterministic validation, prompt-injection) Tj
+0 -15 Td
+(protection, provider independence, and complete auditability.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(text) Tj
+0 -15 Td
+(Agent ? proposes) Tj
+0 -15 Td
+(Policy ? decides) Tj
+0 -15 Td
+(Human ? approves high-impact actions) Tj
+0 -15 Td
+(Outbox ? stores approved work) Tj
+0 -15 Td
+(Adapter ? performs provider side effect) Tj
+0 -15 Td
+(Audit ? records the result) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(OUTBOX DELIVERY) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(src/revenue_system/orchestration/delivery.py performs outbox delivery. It is invoked) Tj
+0 -15 Td
+(with:) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(powershell) Tj
+0 -15 Td
+(python -m revenue_system.cli approvals deliver) Tj
+ET
+endstream
+endobj
+9 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 8 0 R >>
+endobj
+10 0 obj
+<< /Length 2226 >>
+stream
+BT
+/F1 9.5 Tf
+50 750 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(It reads pending rows, selects the adapter by action type, sends the request, uses an) Tj
+0 -15 Td
+(idempotency key, marks the item sent only after success, and audits failures without) Tj
+0 -15 Td
+(losing pending work.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Current paths are:) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(text) Tj
+0 -15 Td
+(OutboxDeliveryService ? MailAdapter ? Resend) Tj
+0 -15 Td
+(OutboxDeliveryService ? DropboxSignAdapter ? Dropbox Sign) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(AGENTS AND DETERMINISTIC SKILLS) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Agents handle outreach, reply triage, call intelligence, deal desk/IO drafting, research) Tj
+0 -15 Td
+(boundaries, and pipeline analysis. They return typed Pydantic models.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Deterministic skills handle scoring, policy, state transitions, IO validation,) Tj
+0 -15 Td
+(templates, tracking, lessons, and idempotency-sensitive decisions.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(TOOLS USED) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(? Python: application language.) Tj
+0 -15 Td
+(? Pydantic/Pydantic Settings: typed contracts and configuration.) Tj
+0 -15 Td
+(? SQLite: local durable operational store.) Tj
+0 -15 Td
+(? Typer: operational CLI.) Tj
+0 -15 Td
+(? Jinja2: email and document templates.) Tj
+0 -15 Td
+(? OpenRouter: current live LLM provider using a structured Claude model.) Tj
+0 -15 Td
+(? Claude Agent SDK: supported alternative LLM runner.) Tj
+0 -15 Td
+(? Resend: controlled real email delivery.) Tj
+0 -15 Td
+(? Dropbox Sign: e-signature adapter; test mode is used without a paid plan.) Tj
+0 -15 Td
+(? FastAPI/Uvicorn: webhook and service foundation.) Tj
+0 -15 Td
+(? Git/GitHub: version control and collaboration.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(SAFETY AND GOVERNANCE) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(The system includes human approval for Tier-A outreach and commercial actions, prompt-) Tj
+0 -15 Td
+(injection detection, typed schemas, deterministic validation, idempotency, recipient) Tj
+0 -15 Td
+(allowlisting, explicit live side-effect control, kill switch, provider error handling,) Tj
+0 -15 Td
+(and audit records.) Tj
+0 -15 Td
+() Tj
+ET
+endstream
+endobj
+11 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 10 0 R >>
+endobj
+12 0 obj
+<< /Length 2071 >>
+stream
+BT
+/F1 9.5 Tf
+50 750 Td
+() Tj
+0 -15 Td
+(RUNTIME MODES) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(| Mode | Purpose |) Tj
+0 -15 Td
+(|---|---|) Tj
+0 -15 Td
+(| test | fake runners and isolated tests |) Tj
+0 -15 Td
+(| replay | deterministic offline demo |) Tj
+0 -15 Td
+(| record | capture live responses for replay |) Tj
+0 -15 Td
+(| live | configured provider adapters |) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Modes are selected independently per integration.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(CURRENT VERIFICATION) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(The project has verified 37 passing tests, both segment packs, live OpenRouter) Tj
+0 -15 Td
+(execution, real allowlisted Resend delivery, approval and rejection, approved outbox) Tj
+0 -15 Td
+(delivery, audit provider IDs, prompt-injection handling, deterministic IO repair, and) Tj
+0 -15 Td
+(Dropbox Sign test-mode request creation.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(DROPBOX SIGN WITHOUT A PAID PLAN) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(ESIGN_TEST_MODE=true creates a test request and records its provider ID, but does not) Tj
+0 -15 Td
+(send a real signer notification. The included fixtures/demo-agreement.pdf is fictional) Tj
+0 -15 Td
+(and intended only for testing.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(PRODUCTION RECOMMENDATIONS) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(Before large-scale operation, migrate SQLite to PostgreSQL, supervise workers, use a) Tj
+0 -15 Td
+(secrets manager, configure signed webhooks, add monitoring and rate limits, configure) Tj
+0 -15 Td
+(backups and credential rotation, enforce real domain governance, and obtain an approved) Tj
+0 -15 Td
+(paid e-signature plan before disabling test mode.) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(OPERATIONAL COMMANDS) Tj
+0 -15 Td
+() Tj
+0 -15 Td
+() Tj
+0 -15 Td
+(powershell) Tj
+0 -15 Td
+(python -m revenue_system.cli validate-packs) Tj
+0 -15 Td
+(python -m revenue_system.cli demo --mode replay) Tj
+0 -15 Td
+(python -m revenue_system.cli demo --mode live) Tj
+0 -15 Td
+(python -m revenue_system.cli approvals list) Tj
+ET
+endstream
+endobj
+13 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 12 0 R >>
+endobj
+14 0 obj
+<< /Length 400 >>
+stream
+BT
+/F1 9.5 Tf
+50 750 Td
+(python -m revenue_system.cli approvals approve <approval-id>) Tj
+0 -15 Td
+(python -m revenue_system.cli approvals reject <approval-id>) Tj
+0 -15 Td
+(python -m revenue_system.cli approvals deliver) Tj
+0 -15 Td
+(python -m revenue_system.cli audit <deal-id>) Tj
+0 -15 Td
+(python -m revenue_system.cli kill-switch --enabled) Tj
+0 -15 Td
+(python -m pytest -q) Tj
+0 -15 Td
+() Tj
+ET
+endstream
+endobj
+15 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 14 0 R >>
+endobj
+xref
+0 16
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000148 00000 n 
+0000000218 00000 n 
+0000002596 00000 n 
+0000002722 00000 n 
+0000005290 00000 n 
+0000005416 00000 n 
+0000007599 00000 n 
+0000007725 00000 n 
+0000010004 00000 n 
+0000010132 00000 n 
+0000012256 00000 n 
+0000012384 00000 n 
+0000012836 00000 n 
+trailer
+<< /Size 16 /Root 1 0 R >>
+startxref
+12964
+%%EOF
