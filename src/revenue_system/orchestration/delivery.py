@@ -5,9 +5,10 @@ from revenue_system.domain.models import ActionType
 
 
 class OutboxDeliveryService:
-    def __init__(self, store: SQLiteStore, mail) -> None:
+    def __init__(self, store: SQLiteStore, mail, fallback_recipient: str | None = None) -> None:
         self.store = store
         self.mail = mail
+        self.fallback_recipient = fallback_recipient
 
     async def deliver_pending(self) -> list[str]:
         delivered: list[str] = []
@@ -16,7 +17,7 @@ class OutboxDeliveryService:
             payload = __import__("json").loads(row["payload"])
             try:
                 if action_type in {ActionType.SEND_FIRST_TOUCH, ActionType.SEND_FOLLOW_UP}:
-                    recipient = payload.get("recipient")
+                    recipient = payload.get("recipient") or self.fallback_recipient
                     if not recipient:
                         raise ValueError("approved mail action is missing recipient")
                     provider_id = await self.mail.send(recipient, payload["subject"], payload["body"], row["id"])

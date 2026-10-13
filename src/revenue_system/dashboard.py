@@ -47,7 +47,6 @@ setInterval(()=>{if(window.dashboardData)ensureRejectedMetric(window.dashboardDa
 document.querySelectorAll('.nav div').forEach((item,index)=>{item.addEventListener('click',()=>{location.hash=viewNames[index];renderPage(viewNames[index],window.dashboardData||{deals:[],approvals:[],outbox:[],audit:[],scenarios:[]})})});
 window.addEventListener('hashchange',()=>renderPage(viewNames.includes(location.hash.slice(1))?location.hash.slice(1):'overview',window.dashboardData||{deals:[],approvals:[],outbox:[],audit:[],scenarios:[]}));
 load();
-const baseRenderPage=renderPage; renderPage=function(view,data){baseRenderPage(view,data);if(view==='audit'){page.insertAdjacentHTML('afterbegin',`<section class="card"><div class="label">Rejected approvals</div><div class="metric">${data.metrics.rejected_approvals}</div></section>`)} };
 </script></body></html>"""
 
 
@@ -101,7 +100,8 @@ def reject(approval_id: str, payload: dict) -> dict:
 async def deliver() -> dict:
     container = build_container(Settings())
     try:
-        delivered = await OutboxDeliveryService(container.store, container.mail).deliver_pending()
+        fallback = next((item.strip() for item in Settings().mail_allowed_recipients.split(",") if item.strip()), None)
+        delivered = await OutboxDeliveryService(container.store, container.mail, fallback).deliver_pending()
     except Exception as exc:
         raise HTTPException(502, f"delivery failed: {exc}") from exc
     return {"message": f"Delivered {len(delivered)} item(s)", "delivered": delivered}

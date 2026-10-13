@@ -71,7 +71,8 @@ def reject(approval_id: str, reason: str = typer.Option(..., "--reason", prompt=
 def deliver_approved() -> None:
     """Deliver approved outbox actions through configured live adapters."""
     container = build_container()
-    delivered = asyncio.run(OutboxDeliveryService(container.store, container.mail).deliver_pending())
+    fallback = next((item.strip() for item in container.settings.mail_allowed_recipients.split(",") if item.strip()), None)
+    delivered = asyncio.run(OutboxDeliveryService(container.store, container.mail, fallback).deliver_pending())
     for item in delivered:
         typer.echo(f"delivered: {item}")
 
