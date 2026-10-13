@@ -21,6 +21,19 @@ class DealOrchestrator:
             return self._create_and_score(event)
         return None
 
+    def advance(self, deal_id: str, target: str, reason: str, fields: dict | None = None) -> Deal:
+        """Move a deal one guarded step and record why."""
+        deal = self.store.get_deal(deal_id)
+        if deal is None:
+            raise ValueError(f"Unknown deal: {deal_id}")
+        source = deal.stage
+        deal.stage = transition(source, target)
+        deal.fields.update(fields or {})
+        deal.updated_at = datetime.now(timezone.utc)
+        self.store.save_deal(deal)
+        self.store.audit("orchestrator", "stage_changed", f"{source} -> {target}: {reason}", deal.id)
+        return deal
+
     def _create_and_score(self, event: DomainEvent) -> Deal:
         payload = event.payload
         deal = Deal(

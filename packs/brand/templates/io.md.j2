@@ -1,11 +1,12 @@
 # Insertion Order
 
 Customer: {{ legal_entity }}
-Budget: {{ budget }}
+Budget: USD {{ "{:,.2f}".format(budget | float) }}
 Start: {{ start_date }}
 End: {{ end_date }}
 
 ## Line items
 
-{{ line_items }}
+{% for item in line_items %}- {{ item.name }}: USD {{ "{:,.2f}".format(item.amount | float) }}
+{% endfor %}
 

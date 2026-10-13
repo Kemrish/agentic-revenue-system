@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from uuid import uuid4
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from .adapters.db import SQLiteStore
 from .container import build_container
+from .demo_api import router as demo_router
 from .domain.models import Action, ActionType
 from .governance.approvals import ApprovalService
 from .governance.policy import PolicyEngine
@@ -22,6 +24,7 @@ from .settings import Settings
 app = FastAPI(title="Agentic Revenue System Dashboard")
 ASSETS = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=ASSETS, check_dir=False), name="static")
+app.include_router(demo_router)
 _delivery_lock = asyncio.Lock()
 
 
@@ -31,6 +34,20 @@ class RejectionRequest(BaseModel):
 
 class RecipientRequest(BaseModel):
     recipient: str = Field(min_length=3, max_length=254)
+
+
+class KillSwitchRequest(BaseModel):
+    enabled: bool
+
+
+class LessonStatusRequest(BaseModel):
+    status: str = Field(pattern="^(active|retired|proposed)$")
+
+
+class LessonRequest(BaseModel):
+    statement: str = Field(min_length=3, max_length=1000)
+    segment: str = "global"
+    evidence: str = Field(default="operator", max_length=500)
 
 
 @contextmanager
@@ -101,6 +118,10 @@ def overview():
         outbox = [action_details(store, row) for row in rows(store,
                   "SELECT * FROM outbox ORDER BY created_at DESC, id")]
         audit = rows(store, "SELECT * FROM audit_log ORDER BY id DESC LIMIT 500")
+        lessons = [row | {"evidence": json.loads(row["evidence"])} for row in rows(store,
+                   "SELECT * FROM lessons ORDER BY CASE status WHEN 'proposed' THEN 0 WHEN 'active' THEN 1 ELSE 2 END, created_at DESC")]
+        decisions = {row["action"]: row["n"] for row in rows(store,
+                     "SELECT action, COUNT(*) n FROM audit_log WHERE actor='policy' GROUP BY action")}
         count = lambda query: store.connection.execute(query).fetchone()[0]
         return {
             "runtime": {"provider": settings.llm_provider, "mode": settings.runtime_mode,
@@ -112,7 +133,9 @@ def overview():
                         "outbox_pending": count("SELECT COUNT(*) FROM outbox WHERE status='pending'"),
                         "audit_events": count("SELECT COUNT(*) FROM audit_log")},
             "deals": deals, "approvals": approvals, "approval_history": history,
-            "outbox": outbox, "audit": audit,
+            "outbox": outbox, "audit": audit, "lessons": lessons,
+            "stage_counts": {row["stage"]: row["n"] for row in rows(store, "SELECT stage, COUNT(*) n FROM deals GROUP BY stage")},
+            "policy_decisions": decisions,
             "scenarios": [
                 {"name": "Automatic", "decision": "AUTO", "reason": "Permitted actions enter the outbox without human review."},
                 {"name": "Human approval", "decision": "REQUIRE_APPROVAL", "reason": "Tier-A first touch and commercial actions need review."},
@@ -202,3 +225,37 @@ async def deliver():
                     "delivered": delivered, "failures": service.failures}
         finally:
             container.store.connection.close()
+
+
+@app.post("/api/kill-switch")
+def set_kill_switch(request: KillSwitchRequest):
+    with dashboard_store() as (_, store):
+        store.set_flag("global_kill_switch", request.enabled)
+        store.audit("human", "KILL_SWITCH" if request.enabled else "kill_switch_released",
+                    "Emergency stop enabled from dashboard" if request.enabled else "Operations resumed from dashboard")
+        return {"message": "Emergency stop is active. Routing and delivery are paused." if request.enabled
+                else "Operations resumed. Queued work can be delivered again."}
+
+
+@app.post("/api/lessons")
+def add_lesson(request: LessonRequest):
+    with dashboard_store() as (_, store):
+        lesson_id = f"lesson-{uuid4().hex[:8]}"
+        store.save_lesson(lesson_id, request.segment, request.statement.strip(), [request.evidence])
+        store.audit("human", "lesson_proposed", f"{lesson_id}: {request.statement.strip()}")
+        return {"message": "Saved as a proposed lesson. Promote it in Lessons before agents can use it.", "id": lesson_id}
+
+
+@app.post("/api/lessons/{lesson_id}/status")
+def set_lesson_status(lesson_id: str, request: LessonStatusRequest):
+    with dashboard_store() as (_, store):
+        with store.connection:
+            updated = store.connection.execute("UPDATE lessons SET status=? WHERE id=?", (request.status, lesson_id))
+            if updated.rowcount != 1:
+                raise HTTPException(404, "Lesson not found.")
+            store.connection.execute(
+                "INSERT INTO audit_log(deal_id,actor,action,detail,created_at) VALUES(NULL,'human',?,?,datetime('now'))",
+                (f"lesson_{request.status}", lesson_id))
+        verb = {"active": "Promoted. Outreach will retrieve it on the next run.", "retired": "Retired. Agents will no longer retrieve it.",
+                "proposed": "Moved back to proposed."}[request.status]
+        return {"message": verb}

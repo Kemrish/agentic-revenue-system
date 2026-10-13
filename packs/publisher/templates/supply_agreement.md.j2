@@ -1,11 +1,12 @@
 # Supply Agreement
 
 Publisher: {{ legal_entity }}
-Budget or commitment: {{ budget }}
+Budget or commitment: USD {{ "{:,.2f}".format(budget | float) }}
 Start: {{ start_date }}
 End: {{ end_date }}
 
 ## Commercial terms
 
-{{ line_items }}
+{% for item in line_items %}- {{ item.name }}: USD {{ "{:,.2f}".format(item.amount | float) }}
+{% endfor %}
 

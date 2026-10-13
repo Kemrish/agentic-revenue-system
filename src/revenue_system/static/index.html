@@ -3,41 +3,57 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Agentic Revenue System</title>
-  <link rel="stylesheet" href="/static/dashboard.css?v=2">
-  <script src="/static/dashboard.js?v=2" defer></script>
+  <title>Cool AI · Agentic Revenue System</title>
+  <link rel="stylesheet" href="/static/dashboard.css?v=3">
+  <script src="/static/dashboard.js?v=3" defer></script>
 </head>
 <body>
   <div class="shell">
     <aside class="sidebar">
-      <a class="brand" href="#overview">Agentic<br>Revenue System<span>Governed revenue operations</span></a>
+      <a class="brand" href="#overview">
+        <span class="logo" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 17l5-5 4 4 7-8"/><path d="M15 8h5v5"/></svg></span>
+        <span class="brand-text">Agentic Revenue<small>Governed by Cool AI</small></span>
+      </a>
       <nav aria-label="Main navigation">
-        <a href="#overview" data-view="overview">Overview</a>
-        <a href="#pipeline" data-view="pipeline">Pipeline</a>
-        <a href="#approvals" data-view="approvals">Approvals</a>
-        <a href="#outbox" data-view="outbox">Outbox</a>
-        <a href="#audit" data-view="audit">Audit trail</a>
+        <div class="nav-group">Present</div>
+        <a href="#explain" data-view="explain"><svg viewBox="0 0 24 24"><path d="M12 3l9 4.5-9 4.5-9-4.5z"/><path d="M3 12l9 4.5 9-4.5"/><path d="M3 16.5l9 4.5 9-4.5"/></svg>How it works</a>
+        <a href="#lab" data-view="lab"><svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"/></svg>Demo lab</a>
+        <div class="nav-group">Operate</div>
+        <a href="#overview" data-view="overview"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Command center</a>
+        <a href="#pipeline" data-view="pipeline"><svg viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>Pipeline</a>
+        <a href="#approvals" data-view="approvals"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Approvals<span class="nav-count" data-nav-count="approvals" hidden></span></a>
+        <a href="#outbox" data-view="outbox"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>Outbox<span class="nav-count" data-nav-count="outbox" hidden></span></a>
+        <a href="#lessons" data-view="lessons"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>Lessons<span class="nav-count" data-nav-count="lessons" hidden></span></a>
+        <a href="#audit" data-view="audit"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>Audit trail</a>
       </nav>
-      <div class="sidebar-note">Operator workspace<span>Review decisions. Trace every action.</span></div>
+      <div class="sidebar-foot">
+        <div class="foot-label">Runtime</div>
+        <div id="runtime-detail" class="foot-detail">Connecting...</div>
+      </div>
     </aside>
     <main>
       <header class="top">
-        <div><div class="eyebrow">Operations control center</div><h1 id="page-title">Revenue command center</h1><p id="page-description">Loading workspace...</p></div>
-        <div class="header-actions"><span id="runtime" class="status">Connecting...</span><button type="button" id="refresh" class="button secondary">Refresh</button></div>
+        <div class="title-block"><div class="eyebrow" id="page-eyebrow">Operate</div><h1 id="page-title">Revenue command center</h1><p id="page-description">Loading workspace...</p></div>
+        <div class="header-actions">
+          <span id="runtime" class="status"><span class="dot"></span><span id="runtime-text">Connecting...</span></span>
+          <button type="button" id="kill-toggle" class="button ghost-danger">Emergency stop</button>
+          <button type="button" id="refresh" class="button secondary">Refresh</button>
+        </div>
       </header>
-      <div id="emergency" class="banner error" hidden>Emergency stop is active. Queued work is paused.</div>
+      <div id="emergency" class="banner error" hidden><strong>Emergency stop is active.</strong> Policy routes every action to KILL_SWITCH and delivery is paused. Queued work stays pending.</div>
       <div id="notice" class="banner" role="status" aria-live="polite" hidden></div>
       <div class="sync-status" id="sync-status">Loading data...</div>
       <section id="metrics" class="metrics" aria-label="Workspace totals">
-        <article class="metric-card"><span>Deals</span><strong data-metric="deals">—</strong></article>
-        <article class="metric-card"><span>Pending approvals</span><strong data-metric="pending_approvals">—</strong></article>
-        <article class="metric-card"><span>Outbox pending</span><strong data-metric="outbox_pending">—</strong></article>
+        <article class="metric-card"><span>Deals in pipeline</span><strong data-metric="deals">—</strong></article>
+        <article class="metric-card warn"><span>Pending approvals</span><strong data-metric="pending_approvals">—</strong></article>
+        <article class="metric-card info"><span>Outbox pending</span><strong data-metric="outbox_pending">—</strong></article>
         <article class="metric-card"><span>Audit events</span><strong data-metric="audit_events">—</strong></article>
-        <article class="metric-card"><span>Rejected approvals</span><strong data-metric="rejected_approvals">—</strong></article>
+        <article class="metric-card danger"><span>Rejected approvals</span><strong data-metric="rejected_approvals">—</strong></article>
       </section>
       <div id="page-view" aria-live="polite"><section class="panel empty">Loading workspace...</section></div>
     </main>
   </div>
+
   <dialog id="review-dialog" aria-labelledby="review-title">
     <div class="dialog-heading"><div><div class="eyebrow">Action review</div><h2 id="review-title">Review proposal</h2></div><button type="button" id="close-review" class="button secondary" aria-label="Close review">Close</button></div>
     <div id="review-content"></div>
@@ -49,6 +65,21 @@
       <div class="actions"><button type="button" id="cancel-rejection" class="button secondary">Back to review</button><button type="submit" class="button danger">Confirm rejection</button></div>
     </form>
     <div id="review-actions" class="dialog-footer"></div>
+  </dialog>
+
+  <dialog id="deal-dialog" class="wide" aria-labelledby="deal-title">
+    <div class="dialog-heading"><div><div class="eyebrow">Deal record</div><h2 id="deal-title">Deal</h2></div><button type="button" class="button secondary" data-command="close-deal">Close</button></div>
+    <div id="deal-content"></div>
+  </dialog>
+
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title">
+    <form method="dialog" id="confirm-form">
+      <div class="eyebrow" id="confirm-eyebrow">Confirm</div>
+      <h2 id="confirm-title">Are you sure?</h2>
+      <div id="confirm-body" class="confirm-body"></div>
+      <div id="confirm-input-wrap" hidden><label for="confirm-input" id="confirm-input-label">Type to confirm</label><input id="confirm-input" autocomplete="off"></div>
+      <div class="dialog-footer"><button type="button" class="button secondary" id="confirm-cancel">Cancel</button><button type="submit" class="button" id="confirm-ok">Confirm</button></div>
+    </form>
   </dialog>
 </body>
 </html>
