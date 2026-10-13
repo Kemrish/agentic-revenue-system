@@ -11,11 +11,23 @@ class ApprovalService:
         self.store.add_approval(approval_id, action)
         self.store.audit("system", "approval_requested", action.action_type.value, action.deal_id)
 
-    def decide(self, approval_id: str, approved: bool) -> DomainEvent:
+    def decide(self, approval_id: str, approved: bool, rejection_reason: str | None = None) -> DomainEvent:
+        if not approved and not rejection_reason:
+            raise ValueError("A rejection reason is required")
         status = "approved" if approved else "rejected"
-        self.store.connection.execute("UPDATE approvals SET status=? WHERE id=?", (status, approval_id))
+        self.store.connection.execute("UPDATE approvals SET status=?, rejection_reason=? WHERE id=?", (status, rejection_reason, approval_id))
         self.store.connection.commit()
-        self.store.audit("human", f"approval_{status}", approval_id)
+        detail = approval_id if approved else f"{approval_id}: {rejection_reason}"
+        self.store.audit("human", f"approval_{status}", detail)
+        if not approved:
+            row = self.store.get_approval(approval_id)
+            deal = self.store.get_deal(row["deal_id"]) if row else None
+            if deal:
+                self.store.save_lesson(
+                    f"rejection:{approval_id}", deal.segment,
+                    f"Do not automatically repeat {row['action_type']} for {deal.company_name}: {rejection_reason}",
+                    [f"human rejection {approval_id}"], "proposed",
+                )
         if approved:
             row = self.store.get_approval(approval_id)
             if row:

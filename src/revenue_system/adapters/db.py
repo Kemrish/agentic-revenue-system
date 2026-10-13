@@ -52,6 +52,9 @@ class SQLiteStore:
             );
             """
         )
+        columns = {row["name"] for row in self.connection.execute("PRAGMA table_info(approvals)")}
+        if "rejection_reason" not in columns:
+            self.connection.execute("ALTER TABLE approvals ADD COLUMN rejection_reason TEXT")
         self.connection.commit()
 
     def save_deal(self, deal: Deal) -> None:
@@ -96,7 +99,7 @@ class SQLiteStore:
         self.connection.commit()
 
     def add_approval(self, approval_id: str, action: Action) -> None:
-        self.connection.execute("INSERT OR IGNORE INTO approvals VALUES (?, ?, ?, ?, 'pending', datetime('now'))", (approval_id, action.deal_id, action.action_type.value, json.dumps(action.payload)))
+        self.connection.execute("INSERT OR IGNORE INTO approvals(id,deal_id,action_type,payload,status,created_at,rejection_reason) VALUES (?, ?, ?, ?, 'pending', datetime('now'), NULL)", (approval_id, action.deal_id, action.action_type.value, json.dumps(action.payload)))
         self.connection.commit()
 
     def pending_approvals(self) -> list[sqlite3.Row]:
@@ -104,6 +107,9 @@ class SQLiteStore:
 
     def get_approval(self, approval_id: str) -> sqlite3.Row | None:
         return self.connection.execute("SELECT * FROM approvals WHERE id=?", (approval_id,)).fetchone()
+
+    def rejected_approvals_count(self) -> int:
+        return int(self.connection.execute("SELECT COUNT(*) FROM approvals WHERE status='rejected'").fetchone()[0])
 
     def pending_outbox(self) -> list[sqlite3.Row]:
         return list(self.connection.execute("SELECT * FROM outbox WHERE status='pending' ORDER BY created_at"))

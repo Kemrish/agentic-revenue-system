@@ -25,7 +25,7 @@ HTML = """<!doctype html>
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const badge=x=>`<span class="badge ${x==='AUTO'?'auto':x==='DENY'?'deny':x==='KILL_SWITCH'?'kill':x==='REQUIRE_APPROVAL'?'approval':'neutral'}">${esc(x)}</span>`;
 function toast(s){const t=document.querySelector('#toast');t.textContent=s;t.style.display='block';setTimeout(()=>t.style.display='none',2500)}
-async function action(url,method='POST'){const r=await fetch(url,{method});const d=await r.json();if(!r.ok)throw Error(d.detail||'Request failed');toast(d.message||'Updated');await load()}
+async function action(url,method='POST',body=null){try{const r=await fetch(url,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):null});const d=await r.json();if(!r.ok)throw Error(d.detail||d.message||'Request failed');toast(d.message||'Updated');await load()}catch(error){toast(`Action failed: ${error.message}`)}}
 async function load(){const d=await fetch('/api/overview').then(r=>r.json());document.querySelector('#runtime').textContent=`${d.runtime.provider} · ${d.runtime.mode}`;document.querySelector('#metrics').innerHTML=[['Deals',d.metrics.deals],['Pending approvals',d.metrics.pending_approvals],['Outbox pending',d.metrics.outbox_pending],['Audit events',d.metrics.audit_events]].map(x=>`<div class="card"><div class="label">${x[0]}</div><div class="metric">${x[1]}</div></div>`).join('');document.querySelector('#deals').innerHTML=d.deals.length?`<table class="table"><tr><th>Account</th><th>Segment</th><th>Score</th><th>Tier</th><th>Stage</th></tr>${d.deals.map(x=>`<tr><td><strong>${esc(x.company)}</strong><br><span class="label">${esc(x.contact)}</span></td><td>${esc(x.segment)}</td><td>${x.score}</td><td>${badge(x.tier)}</td><td>${esc(x.stage)}</td></tr>`).join('')}</table>`:'<div class="empty">No deals yet. Run the demo to populate the dashboard.</div>';document.querySelector('#approvals').innerHTML=d.approvals.length?d.approvals.map(x=>`<div class="scenario"><div><strong>${esc(x.action)}</strong><p>${esc(x.deal_id)}</p></div><div class="actions"><button class="btn" onclick="action('/api/approvals/${encodeURIComponent(x.id)}/approve')">Approve</button><button class="btn danger" onclick="action('/api/approvals/${encodeURIComponent(x.id)}/reject')">Reject</button></div></div>`).join(''):'<div class="empty">No pending approvals.</div>';document.querySelector('#outbox').innerHTML=d.outbox.length?d.outbox.map(x=>`<div class="scenario"><div><strong>${esc(x.action)}</strong><p>${esc(x.deal_id)} · ${esc(x.status)}</p></div></div>`).join(''):'<div class="empty">Outbox is clear.</div>';document.querySelector('#audit').innerHTML=d.audit.length?`<table class="table"><tr><th>Actor</th><th>Action</th><th>Detail</th></tr>${d.audit.slice(0,8).map(x=>`<tr><td>${esc(x.actor)}</td><td>${esc(x.action)}</td><td>${esc(x.detail)}</td></tr>`).join('')}</table>`:'<div class="empty">No audit events yet.</div>';document.querySelector('#scenarios').innerHTML=d.scenarios.map(x=>`<div class="scenario"><div><strong>${esc(x.name)}</strong><p>${esc(x.reason)}</p></div>${badge(x.decision)}</div>`).join('')}
 document.querySelectorAll('.nav div').forEach((item,index)=>{item.setAttribute('role','button');item.setAttribute('tabindex','0');const targets=['deals','deals','approvals','outbox','audit'];item.addEventListener('click',()=>{const target=document.getElementById(targets[index]);if(target)target.scrollIntoView({behavior:'smooth',block:'start'});document.querySelectorAll('.nav div').forEach(x=>x.classList.remove('active'));item.classList.add('active')});item.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();item.click()}})});load();setInterval(load,10000);
 </script><script>
@@ -39,10 +39,12 @@ if(view==='approvals') page.innerHTML=`<section class="panel"><h2>Approval cente
 if(view==='outbox') page.innerHTML=`<section class="panel"><h2>Outbox operations</h2><div class="hint">Approved work waiting for provider delivery.</div>${data.outbox.length?table(['Action','Deal','Status'],data.outbox.map(x=>`<tr><td>${esc(x.action_type)}</td><td>${esc(x.deal_id)}</td><td>${esc(x.status)}</td></tr>`)):'<div class="empty">No pending outbox work.</div>'}<button class="btn" onclick="action('/api/outbox/deliver')">Deliver approved work</button></section>`;
 if(view==='audit') page.innerHTML=`<section class="panel"><h2>Audit trail</h2><div class="hint">Chronological policy, approval, delivery, and safety evidence.</div>${data.audit.length?table(['Time','Actor','Action','Detail'],data.audit.map(x=>`<tr><td>${esc(x.created_at)}</td><td>${esc(x.actor)}</td><td>${esc(x.action)}</td><td>${esc(x.detail)}</td></tr>`)):'<div class="empty">No audit events yet.</div>'}</section>`;
 }
-const oldLoad=load; load=async function(){const data=await fetch('/api/overview').then(r=>r.json()); window.dashboardData=data; await oldLoad(); renderPage(selectedView,data)};
+const rawAction=action; action=async function(url,method='POST',body=null){if(url.includes('/reject')&&!body){const reason=prompt('Why are you rejecting this action?');if(!reason||!reason.trim()){toast('A rejection reason is required');return}body={reason:reason.trim()}}return rawAction(url,method,body)};
+const oldLoad=load; load=async function(){const data=await fetch('/api/overview').then(r=>r.json()); window.dashboardData=data; await oldLoad(); const metric=document.querySelector('#metrics'); if(metric&&!metric.querySelector('[data-rejected]')){const card=document.createElement('div');card.className='card';card.dataset.rejected='true';card.innerHTML=`<div class="label">Rejected approvals</div><div class="metric">${data.metrics.rejected_approvals}</div>`;metric.appendChild(card)} renderPage(selectedView,data)};
 document.querySelectorAll('.nav div').forEach((item,index)=>{item.addEventListener('click',()=>{location.hash=viewNames[index];renderPage(viewNames[index],window.dashboardData||{deals:[],approvals:[],outbox:[],audit:[],scenarios:[]})})});
 window.addEventListener('hashchange',()=>renderPage(viewNames.includes(location.hash.slice(1))?location.hash.slice(1):'overview',window.dashboardData||{deals:[],approvals:[],outbox:[],audit:[],scenarios:[]}));
 load();
+const baseRenderPage=renderPage; renderPage=function(view,data){baseRenderPage(view,data);if(view==='audit'){page.insertAdjacentHTML('afterbegin',`<section class="card"><div class="label">Rejected approvals</div><div class="metric">${data.metrics.rejected_approvals}</div></section>`)} };
 </script></body></html>"""
 
 
@@ -68,7 +70,7 @@ def overview() -> dict:
     approvals = _rows(store, "SELECT id, deal_id, action_type FROM approvals WHERE status='pending' ORDER BY created_at DESC")
     outbox = _rows(store, "SELECT id, deal_id, action_type, status FROM outbox WHERE status='pending' ORDER BY created_at DESC")
     audit = _rows(store, "SELECT actor, action, detail, created_at FROM audit_log ORDER BY id DESC LIMIT 20")
-    return {"runtime": {"provider": settings.llm_provider, "mode": settings.runtime_mode}, "metrics": {"deals": len(deals), "pending_approvals": len(approvals), "outbox_pending": len(outbox), "audit_events": store.connection.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]}, "deals": deals, "approvals": approvals, "outbox": outbox, "audit": audit, "scenarios": [{"name": "Auto", "decision": "AUTO", "reason": "Low-risk enrichment, scoring, or follow-up is allowed."}, {"name": "Human approval", "decision": "REQUIRE_APPROVAL", "reason": "Tier-A first touch or commercial action needs review."}, {"name": "Denied", "decision": "DENY", "reason": "Unsafe content, invalid data, or policy violation blocks this action."}, {"name": "Emergency stop", "decision": "KILL_SWITCH", "reason": "Global emergency stop suspends all external execution."}]}
+    return {"runtime": {"provider": settings.llm_provider, "mode": settings.runtime_mode}, "metrics": {"deals": len(deals), "pending_approvals": len(approvals), "rejected_approvals": store.rejected_approvals_count(), "outbox_pending": len(outbox), "audit_events": store.connection.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]}, "deals": deals, "approvals": approvals, "outbox": outbox, "audit": audit, "scenarios": [{"name": "Auto", "decision": "AUTO", "reason": "Low-risk enrichment, scoring, or follow-up is allowed."}, {"name": "Human approval", "decision": "REQUIRE_APPROVAL", "reason": "Tier-A first touch or commercial action needs review."}, {"name": "Denied", "decision": "DENY", "reason": "Unsafe content, invalid data, or policy violation blocks this action."}, {"name": "Emergency stop", "decision": "KILL_SWITCH", "reason": "Global emergency stop suspends all external execution."}]}
 
 
 @app.post("/api/approvals/{approval_id}/approve")
@@ -81,16 +83,22 @@ def approve(approval_id: str) -> dict:
 
 
 @app.post("/api/approvals/{approval_id}/reject")
-def reject(approval_id: str) -> dict:
+def reject(approval_id: str, payload: dict) -> dict:
     container = build_container(Settings())
     if not container.store.get_approval(approval_id):
         raise HTTPException(404, "approval not found")
-    ApprovalService(container.store).decide(approval_id, False)
+    reason = str(payload.get("reason", "")).strip()
+    if not reason:
+        raise HTTPException(400, "rejection reason is required")
+    ApprovalService(container.store).decide(approval_id, False, reason)
     return {"message": "Approval rejected"}
 
 
 @app.post("/api/outbox/deliver")
 async def deliver() -> dict:
     container = build_container(Settings())
-    delivered = await OutboxDeliveryService(container.store, container.mail).deliver_pending()
+    try:
+        delivered = await OutboxDeliveryService(container.store, container.mail).deliver_pending()
+    except Exception as exc:
+        raise HTTPException(502, f"delivery failed: {exc}") from exc
     return {"message": f"Delivered {len(delivered)} item(s)", "delivered": delivered}

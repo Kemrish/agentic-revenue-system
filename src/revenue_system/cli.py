@@ -62,8 +62,8 @@ def approve(approval_id: str) -> None:
 
 
 @approvals_app.command("reject")
-def reject(approval_id: str) -> None:
-    event = ApprovalService(build_container().store).decide(approval_id, False)
+def reject(approval_id: str, reason: str = typer.Option(..., "--reason", prompt="Why are you rejecting this approval?")) -> None:
+    event = ApprovalService(build_container().store).decide(approval_id, False, reason)
     typer.echo(f"rejected: {event.payload['approval_id']}")
 
 

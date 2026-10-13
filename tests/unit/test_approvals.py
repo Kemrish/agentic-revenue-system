@@ -15,6 +15,6 @@ def test_approval_decision_creates_resume_event(tmp_path):
 def test_rejected_approval_does_not_create_outbox(tmp_path):
     service = ApprovalService(SQLiteStore(f"sqlite:///{tmp_path / 'rejected.db'}"))
     service.request("a1", Action(ActionType.SEND_FIRST_TOUCH, "d1"))
-    service.decide("a1", False)
+    service.decide("a1", False, "Message is not relevant to this account")
     assert service.store.pending_outbox() == []
 
