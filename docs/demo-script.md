@@ -13,6 +13,14 @@ The reliable presentation mode is replay mode. It needs no vendor credentials.
 python -m revenue_system.cli demo --mode replay
 ```
 
+The operator dashboard can be started with:
+
+```text
+python -m revenue_system.cli ui
+```
+
+Open `http://127.0.0.1:8000`. It displays pipeline metrics, deals, pending approvals, outbox work, audit activity, runtime status, and a policy simulator for `AUTO`, `REQUIRE_APPROVAL`, and `DENY`.
+
 ## Walkthrough
 
 1. Show the architecture diagram and explain that the orchestrator owns state.

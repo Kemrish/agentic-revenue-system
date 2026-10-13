@@ -8,6 +8,7 @@ from .container import build_container
 from .governance.approvals import ApprovalService
 from .orchestration.delivery import OutboxDeliveryService
 from .segments.registry import PackRegistry
+from .dashboard import app as dashboard_app
 
 app = typer.Typer(help="Agentic Revenue System CLI")
 
@@ -73,6 +74,13 @@ def deliver_approved() -> None:
     delivered = asyncio.run(OutboxDeliveryService(container.store, container.mail).deliver_pending())
     for item in delivered:
         typer.echo(f"delivered: {item}")
+
+
+@app.command()
+def ui(host: str = typer.Option("127.0.0.1"), port: int = typer.Option(8000)) -> None:
+    """Start the operator dashboard."""
+    import uvicorn
+    uvicorn.run(dashboard_app, host=host, port=port)
 
 
 if __name__ == "__main__":

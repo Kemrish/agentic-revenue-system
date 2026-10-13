@@ -35,6 +35,7 @@ python -m pip install -e ".[dev]"
 python -m revenue_system.cli validate-packs
 python -m pytest -q
 python -m revenue_system.cli demo --mode replay
+python -m revenue_system.cli ui
 ```
 
 Replay mode is deterministic, requires no credentials, and is the recommended presentation fallback.
