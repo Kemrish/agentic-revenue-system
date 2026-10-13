@@ -11,8 +11,18 @@ def test_top_tier_first_touch_requires_approval():
     assert result.decision == "REQUIRE_APPROVAL"
 
 
-def test_kill_switch_denies_action():
+def test_kill_switch_is_distinct_from_policy_deny():
     deal = Deal("d1", "brand", "Example", "Amina")
     result = PolicyEngine().evaluate(Action(ActionType.ENRICH, "d1"), deal, load_pack(Path("packs/brand/pack.yaml")), kill_switch=True)
+    assert result.decision == "KILL_SWITCH"
+
+
+def test_unsafe_action_is_denied_without_stopping_the_system():
+    deal = Deal("d1", "brand", "Example", "Amina")
+    result = PolicyEngine().evaluate(
+        Action(ActionType.SEND_FOLLOW_UP, "d1", {"injection_detected": True}),
+        deal,
+        load_pack(Path("packs/brand/pack.yaml")),
+    )
     assert result.decision == "DENY"
 

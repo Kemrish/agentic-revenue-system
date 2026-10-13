@@ -5,7 +5,7 @@ from revenue_system.segments.schema import SegmentPack
 
 
 def route_action(store: SQLiteStore, action: Action, deal, pack: SegmentPack, policy: PolicyEngine | None = None) -> str:
-    decision = (policy or PolicyEngine()).evaluate(action, deal, pack)
+    decision = (policy or PolicyEngine()).evaluate(action, deal, pack, kill_switch=store.flag_enabled("global_kill_switch"))
     store.audit("policy", decision.decision, f"{decision.rule_id}: {decision.reason}", deal.id)
     if decision.decision == "AUTO":
         store.add_outbox_once(f"{action.action_type.value}:{deal.id}", action)
