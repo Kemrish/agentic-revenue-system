@@ -1,107 +1,204 @@
-"""Small operator dashboard for the governed revenue workflow."""
+"""Local operator dashboard: review proposals, decide, and trace delivery."""
 
+import asyncio
 import json
+from contextlib import contextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
+from .adapters.db import SQLiteStore
 from .container import build_container
+from .domain.models import Action, ActionType
 from .governance.approvals import ApprovalService
+from .governance.policy import PolicyEngine
 from .orchestration.delivery import OutboxDeliveryService
+from .segments.registry import PackRegistry
 from .settings import Settings
 
-
 app = FastAPI(title="Agentic Revenue System Dashboard")
+ASSETS = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=ASSETS, check_dir=False), name="static")
+_delivery_lock = asyncio.Lock()
 
 
-HTML = """<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Agentic Revenue System</title>
-<style>
-:root{--ink:#172033;--muted:#667085;--line:#e5e7eb;--panel:#fff;--bg:#f5f7fb;--blue:#365cf5;--green:#11875d;--amber:#b86b00;--red:#c23b4a;--shadow:0 12px 32px #1720330d}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px Inter,Segoe UI,Arial,sans-serif}button{font:inherit;cursor:pointer;border:0}.shell{display:flex;min-height:100vh}.side{width:245px;background:#10182b;color:#dce5ff;padding:26px 18px}.brand{font-weight:800;font-size:18px;line-height:1.2;margin-bottom:35px}.brand span{display:block;color:#8fa8ff;font-size:11px;letter-spacing:.12em;text-transform:uppercase;margin-top:8px}.nav{display:grid;gap:8px}.nav div{padding:11px 12px;border-radius:9px;color:#aebbd8}.nav .active{background:#273760;color:white}.main{flex:1;padding:28px 34px;max-width:1500px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:25px}.eyebrow{color:var(--blue);font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.title{font-size:30px;font-weight:800;margin:6px 0}.sub{color:var(--muted)}.status{display:flex;align-items:center;gap:9px;background:white;padding:10px 14px;border:1px solid var(--line);border-radius:20px}.dot{width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px #11875d1c}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-bottom:22px}.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}.card{padding:18px}.label{color:var(--muted);font-size:12px}.metric{font-size:29px;font-weight:800;margin-top:8px}.content{display:grid;grid-template-columns:1.35fr 1fr;gap:18px}.panel{padding:20px;margin-bottom:18px}.panel h2{font-size:16px;margin:0 0 5px}.panel .hint{color:var(--muted);font-size:12px;margin-bottom:16px}.table{width:100%;border-collapse:collapse}.table th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em;padding:10px 8px;border-bottom:1px solid var(--line)}.table td{padding:13px 8px;border-bottom:1px solid #eef0f4}.badge{display:inline-flex;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:800}.auto{background:#e6f7ef;color:var(--green)}.approval{background:#fff1d9;color:var(--amber)}.deny{background:#ffe6e9;color:var(--red)}.neutral{background:#eef1f7;color:#566176}.actions{display:flex;gap:7px}.btn{padding:7px 10px;border-radius:7px;background:#edf1ff;color:#2948c5;font-weight:700}.btn.danger{background:#fff0f1;color:var(--red)}.scenario{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid var(--line)}.scenario:last-child{border:0}.scenario strong{display:block;margin-bottom:4px}.scenario p{margin:0;color:var(--muted);font-size:12px}.empty{color:var(--muted);padding:18px 0}.toast{position:fixed;right:25px;bottom:25px;background:#10182b;color:white;border-radius:9px;padding:12px 16px;display:none}@media(max-width:950px){.side{display:none}.main{padding:20px}.grid{grid-template-columns:repeat(2,1fr)}.content{grid-template-columns:1fr}}@media(max-width:560px){.grid{grid-template-columns:1fr}.top{display:block}.status{margin-top:15px;width:max-content}}
-</style></head><body><div class="shell"><aside class="side"><div class="brand">Agentic<br>Revenue System<span>Governed revenue operations</span></div><div class="nav"><div class="active">Overview</div><div>Pipeline</div><div>Approvals</div><div>Outbox</div><div>Audit trail</div></div></aside><main class="main"><header class="top"><div><div class="eyebrow">Operations control center</div><div class="title">Revenue command center</div><div class="sub">Observe proposals, govern risk, and execute approved work.</div></div><div class="status"><span class="dot"></span><span id="runtime">Loading runtime…</span></div></header><section class="grid" id="metrics"></section><div class="content"><div><section class="panel"><h2>Pipeline and governance</h2><div class="hint">Every action is visible before it reaches an external provider.</div><div id="deals"></div></section><section class="panel"><h2>Recent audit activity</h2><div class="hint">Policy, approval, delivery, and safety evidence.</div><div id="audit"></div></section></div><div><section class="panel"><h2>Policy simulator</h2><div class="hint">The three outcomes used by the Rulebook.</div><div id="scenarios"></div></section><section class="panel"><h2>Pending approvals</h2><div class="hint">Human review is required before high-impact actions.</div><div id="approvals"></div></section><section class="panel"><h2>Outbox</h2><div class="hint">Approved work waiting for provider delivery.</div><div id="outbox"></div></section></div></div></main></div><div class="toast" id="toast"></div><script>
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const badge=x=>`<span class="badge ${x==='AUTO'?'auto':x==='DENY'?'deny':x==='KILL_SWITCH'?'kill':x==='REQUIRE_APPROVAL'?'approval':'neutral'}">${esc(x)}</span>`;
-function toast(s){const t=document.querySelector('#toast');t.textContent=s;t.style.display='block';setTimeout(()=>t.style.display='none',2500)}
-async function action(url,method='POST',body=null){try{const r=await fetch(url,{method,headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):null});const d=await r.json();if(!r.ok)throw Error(d.detail||d.message||'Request failed');toast(d.message||'Updated');await load()}catch(error){toast(`Action failed: ${error.message}`)}}
-async function load(){const d=await fetch('/api/overview').then(r=>r.json());document.querySelector('#runtime').textContent=`${d.runtime.provider} · ${d.runtime.mode}`;document.querySelector('#metrics').innerHTML=[['Deals',d.metrics.deals],['Pending approvals',d.metrics.pending_approvals],['Outbox pending',d.metrics.outbox_pending],['Audit events',d.metrics.audit_events]].map(x=>`<div class="card"><div class="label">${x[0]}</div><div class="metric">${x[1]}</div></div>`).join('');document.querySelector('#deals').innerHTML=d.deals.length?`<table class="table"><tr><th>Account</th><th>Segment</th><th>Score</th><th>Tier</th><th>Stage</th></tr>${d.deals.map(x=>`<tr><td><strong>${esc(x.company)}</strong><br><span class="label">${esc(x.contact)}</span></td><td>${esc(x.segment)}</td><td>${x.score}</td><td>${badge(x.tier)}</td><td>${esc(x.stage)}</td></tr>`).join('')}</table>`:'<div class="empty">No deals yet. Run the demo to populate the dashboard.</div>';document.querySelector('#approvals').innerHTML=d.approvals.length?d.approvals.map(x=>`<div class="scenario"><div><strong>${esc(x.action)}</strong><p>${esc(x.deal_id)}</p></div><div class="actions"><button class="btn" onclick="action('/api/approvals/${encodeURIComponent(x.id)}/approve')">Approve</button><button class="btn danger" onclick="action('/api/approvals/${encodeURIComponent(x.id)}/reject')">Reject</button></div></div>`).join(''):'<div class="empty">No pending approvals.</div>';document.querySelector('#outbox').innerHTML=d.outbox.length?d.outbox.map(x=>`<div class="scenario"><div><strong>${esc(x.action)}</strong><p>${esc(x.deal_id)} · ${esc(x.status)}</p></div></div>`).join(''):'<div class="empty">Outbox is clear.</div>';document.querySelector('#audit').innerHTML=d.audit.length?`<table class="table"><tr><th>Actor</th><th>Action</th><th>Detail</th></tr>${d.audit.slice(0,8).map(x=>`<tr><td>${esc(x.actor)}</td><td>${esc(x.action)}</td><td>${esc(x.detail)}</td></tr>`).join('')}</table>`:'<div class="empty">No audit events yet.</div>';document.querySelector('#scenarios').innerHTML=d.scenarios.map(x=>`<div class="scenario"><div><strong>${esc(x.name)}</strong><p>${esc(x.reason)}</p></div>${badge(x.decision)}</div>`).join('')}
-document.querySelectorAll('.nav div').forEach((item,index)=>{item.setAttribute('role','button');item.setAttribute('tabindex','0');const targets=['deals','deals','approvals','outbox','audit'];item.addEventListener('click',()=>{const target=document.getElementById(targets[index]);if(target)target.scrollIntoView({behavior:'smooth',block:'start'});document.querySelectorAll('.nav div').forEach(x=>x.classList.remove('active'));item.classList.add('active')});item.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();item.click()}})});load();setInterval(load,10000);
-</script><script>
-const compactMetrics=document.createElement('style');compactMetrics.textContent='.grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.card{padding:14px}.metric{font-size:25px;margin-top:6px}@media(max-width:1100px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:700px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}';document.head.appendChild(compactMetrics);
-function ensureRejectedMetric(data){const metric=document.querySelector('#metrics');if(metric&&!metric.querySelector('[data-rejected]')){const card=document.createElement('div');card.className='card';card.dataset.rejected='true';card.innerHTML=`<div class="label">Rejected approvals</div><div class="metric">${data.metrics.rejected_approvals}</div>`;metric.appendChild(card)}}
-const viewNames=['overview','pipeline','approvals','outbox','audit'];
-let selectedView=viewNames.includes(location.hash.slice(1))?location.hash.slice(1):'overview';
-const page=document.createElement('section'); page.id='page-view'; page.style.marginTop='18px'; document.querySelector('.main').appendChild(page);
-function renderPage(view,data){selectedView=view; const overview=document.querySelector('.content'); if(view==='overview'){overview.style.display='grid';page.innerHTML='';return} overview.style.display='none';
-const table=(heads,rows)=>`<table class="table"><tr>${heads.map(h=>`<th>${h}</th>`).join('')}</tr>${rows.join('')}</table>`;
-if(view==='pipeline') page.innerHTML=`<section class="panel"><h2>Pipeline workspace</h2><div class="hint">Every persisted deal, qualification result, and lifecycle stage.</div>${table(['Account','Contact','Segment','Score','Tier','Stage'],data.deals.map(x=>`<tr><td><strong>${esc(x.company)}</strong></td><td>${esc(x.contact)}</td><td>${esc(x.segment)}</td><td>${x.score}</td><td>${badge(x.tier)}</td><td>${esc(x.stage)}</td></tr>`))}</section>`;
-if(view==='approvals') page.innerHTML=`<section class="panel"><h2>Approval center</h2><div class="hint">Review high-impact actions before external execution.</div>${data.approvals.length?data.approvals.map(x=>`<div class="scenario"><div><strong>${esc(x.action_type)}</strong><p>Deal: ${esc(x.deal_id)} · Approval: ${esc(x.id)}</p></div><div class="actions"><button class="btn" onclick="action('/api/approvals/${encodeURIComponent(x.id)}/approve')">Approve</button><button class="btn danger" onclick="action('/api/approvals/${encodeURIComponent(x.id)}/reject')">Reject</button></div></div>`).join(''):'<div class="empty">No pending approvals.</div>'}</section><section class="panel"><h2>Policy outcomes</h2><div class="hint">The Rulebook controls every action.</div>${data.scenarios.map(x=>`<div class="scenario"><div><strong>${esc(x.name)}</strong><p>${esc(x.reason)}</p></div>${badge(x.decision)}</div>`).join('')}</section>`;
-if(view==='outbox') page.innerHTML=`<section class="panel"><h2>Outbox operations</h2><div class="hint">Approved work waiting for provider delivery.</div>${data.outbox.length?table(['Action','Deal','Status'],data.outbox.map(x=>`<tr><td>${esc(x.action_type)}</td><td>${esc(x.deal_id)}</td><td>${esc(x.status)}</td></tr>`)):'<div class="empty">No pending outbox work.</div>'}<button class="btn" onclick="action('/api/outbox/deliver')">Deliver approved work</button></section>`;
-if(view==='audit') page.innerHTML=`<section class="panel"><h2>Audit trail</h2><div class="hint">Chronological policy, approval, delivery, and safety evidence.</div>${data.audit.length?table(['Time','Actor','Action','Detail'],data.audit.map(x=>`<tr><td>${esc(x.created_at)}</td><td>${esc(x.actor)}</td><td>${esc(x.action)}</td><td>${esc(x.detail)}</td></tr>`)):'<div class="empty">No audit events yet.</div>'}</section>`;
-}
-const rawAction=action; action=async function(url,method='POST',body=null){if(url.includes('/reject')&&!body){const reason=prompt('Why are you rejecting this action?');if(!reason||!reason.trim()){toast('A rejection reason is required');return}body={reason:reason.trim()}}return rawAction(url,method,body)};
-const oldLoad=load; load=async function(){const data=await fetch('/api/overview').then(r=>r.json()); window.dashboardData=data; await oldLoad(); ensureRejectedMetric(data); renderPage(selectedView,data)};
-setInterval(()=>{if(window.dashboardData)ensureRejectedMetric(window.dashboardData)},1000);
-document.querySelectorAll('.nav div').forEach((item,index)=>{item.addEventListener('click',()=>{location.hash=viewNames[index];renderPage(viewNames[index],window.dashboardData||{deals:[],approvals:[],outbox:[],audit:[],scenarios:[]})})});
-window.addEventListener('hashchange',()=>renderPage(viewNames.includes(location.hash.slice(1))?location.hash.slice(1):'overview',window.dashboardData||{deals:[],approvals:[],outbox:[],audit:[],scenarios:[]}));
-load();
-</script></body></html>"""
+class RejectionRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=2000)
 
 
-def _rows(store, query: str, params: tuple = ()):
+class RecipientRequest(BaseModel):
+    recipient: str = Field(min_length=3, max_length=254)
+
+
+@contextmanager
+def dashboard_store():
+    settings = Settings()
+    store = SQLiteStore(settings.database_url)
+    try:
+        yield settings, store
+    finally:
+        store.connection.close()
+
+
+def rows(store, query, params=()):
     return [dict(row) for row in store.connection.execute(query, params)]
 
 
-@app.get("/", response_class=HTMLResponse)
-def index() -> str:
-    return HTML
+def action_details(store, row):
+    item = dict(row)
+    item["payload"] = json.loads(item["payload"])
+    deal = store.get_deal(item["deal_id"])
+    item.update(company=deal.company_name if deal else item["deal_id"],
+                contact=deal.contact_name if deal else "", segment=deal.segment if deal else "",
+                tier=deal.score.tier.value if deal and deal.score else "-",
+                score=deal.score.total if deal and deal.score else 0,
+                score_reason=deal.score.reason if deal and deal.score else "Score unavailable")
+    item["policy_reason"] = "Approval required by the default policy rule."
+    if deal:
+        decision = PolicyEngine().evaluate(
+            Action(ActionType(item["action_type"]), deal.id, item["payload"]),
+            deal, PackRegistry(Path("packs")).get(deal.segment),
+        )
+        item["policy_reason"] = decision.reason
+        item["rule_id"] = decision.rule_id
+    return item
+
+
+def validate_recipient(recipient, settings):
+    recipient = recipient.strip()
+    if "@" not in recipient or any(c.isspace() for c in recipient):
+        raise HTTPException(400, "Enter a valid recipient email address.")
+    if settings.runtime_mode == "live" and settings.mail_mode == "live":
+        allowed = {value.strip() for value in settings.mail_allowed_recipients.split(",") if value.strip()}
+        if recipient not in allowed:
+            raise HTTPException(400, "Recipient must be in MAIL_ALLOWED_RECIPIENTS for live delivery.")
+    return recipient
+
+
+@app.get("/")
+def index():
+    return FileResponse(ASSETS / "index.html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/overview")
-def overview() -> dict:
-    settings = Settings()
-    container = build_container(settings)
-    store = container.store
-    deals = []
-    for row in _rows(store, "SELECT id, company_name, contact_name, segment, stage, payload FROM deals ORDER BY updated_at DESC"):
-        payload = json.loads(row.pop("payload"))
-        score = payload.get("score") or {}
-        deals.append({"id": row["id"], "company": row["company_name"], "contact": row["contact_name"], "segment": row["segment"], "score": round(score.get("total", 0)), "tier": score.get("tier", "-"), "stage": row["stage"]})
-    approvals = _rows(store, "SELECT id, deal_id, action_type FROM approvals WHERE status='pending' ORDER BY created_at DESC")
-    outbox = _rows(store, "SELECT id, deal_id, action_type, status FROM outbox WHERE status='pending' ORDER BY created_at DESC")
-    audit = _rows(store, "SELECT actor, action, detail, created_at FROM audit_log ORDER BY id DESC LIMIT 20")
-    return {"runtime": {"provider": settings.llm_provider, "mode": settings.runtime_mode}, "metrics": {"deals": len(deals), "pending_approvals": len(approvals), "rejected_approvals": store.rejected_approvals_count(), "outbox_pending": len(outbox), "audit_events": store.connection.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0]}, "deals": deals, "approvals": approvals, "outbox": outbox, "audit": audit, "scenarios": [{"name": "Auto", "decision": "AUTO", "reason": "Low-risk enrichment, scoring, or follow-up is allowed."}, {"name": "Human approval", "decision": "REQUIRE_APPROVAL", "reason": "Tier-A first touch or commercial action needs review."}, {"name": "Denied", "decision": "DENY", "reason": "Unsafe content, invalid data, or policy violation blocks this action."}, {"name": "Emergency stop", "decision": "KILL_SWITCH", "reason": "Global emergency stop suspends all external execution."}]}
+def overview():
+    with dashboard_store() as (settings, store):
+        deals = []
+        for row in rows(store, "SELECT * FROM deals ORDER BY updated_at DESC, id"):
+            payload = json.loads(row["payload"])
+            score = payload.get("score") or {}
+            deals.append({"id": row["id"], "company": row["company_name"],
+                          "contact": row["contact_name"], "segment": row["segment"],
+                          "score": score.get("total", 0), "tier": score.get("tier", "-"),
+                          "stage": row["stage"], "score_reason": score.get("reason", ""),
+                          "fields": payload.get("fields", {})})
+        approvals = [action_details(store, row) for row in store.pending_approvals()]
+        history = [action_details(store, row) for row in rows(store,
+                   "SELECT * FROM approvals WHERE status!='pending' ORDER BY created_at DESC, id")]
+        outbox = [action_details(store, row) for row in rows(store,
+                  "SELECT * FROM outbox ORDER BY created_at DESC, id")]
+        audit = rows(store, "SELECT * FROM audit_log ORDER BY id DESC LIMIT 500")
+        count = lambda query: store.connection.execute(query).fetchone()[0]
+        return {
+            "runtime": {"provider": settings.llm_provider, "mode": settings.runtime_mode,
+                        "mail_mode": settings.mail_mode, "live_side_effects_enabled": settings.live_side_effects_enabled,
+                        "kill_switch": store.flag_enabled("global_kill_switch"),
+                        "allowed_recipients": [v.strip() for v in settings.mail_allowed_recipients.split(",") if v.strip()]},
+            "metrics": {"deals": len(deals), "pending_approvals": len(approvals),
+                        "rejected_approvals": store.rejected_approvals_count(),
+                        "outbox_pending": count("SELECT COUNT(*) FROM outbox WHERE status='pending'"),
+                        "audit_events": count("SELECT COUNT(*) FROM audit_log")},
+            "deals": deals, "approvals": approvals, "approval_history": history,
+            "outbox": outbox, "audit": audit,
+            "scenarios": [
+                {"name": "Automatic", "decision": "AUTO", "reason": "Permitted actions enter the outbox without human review."},
+                {"name": "Human approval", "decision": "REQUIRE_APPROVAL", "reason": "Tier-A first touch and commercial actions need review."},
+                {"name": "Denied", "decision": "DENY", "reason": "Unsafe or injection-flagged actions are blocked."},
+                {"name": "Emergency stop", "decision": "KILL_SWITCH", "reason": "The global switch pauses routing and delivery."},
+            ],
+        }
 
 
 @app.post("/api/approvals/{approval_id}/approve")
-def approve(approval_id: str) -> dict:
-    container = build_container(Settings())
-    if not container.store.get_approval(approval_id):
-        raise HTTPException(404, "approval not found")
-    ApprovalService(container.store).decide(approval_id, True)
-    return {"message": "Approval granted and action queued for delivery"}
+def approve(approval_id: str):
+    with dashboard_store() as (settings, store):
+        row = store.get_approval(approval_id)
+        if not row:
+            raise HTTPException(404, "Approval not found.")
+        if row["status"] != "pending":
+            raise HTTPException(409, "This approval has already been decided. Refresh to see its status.")
+        payload = json.loads(row["payload"])
+        if payload.get("unsafe") or payload.get("injection_detected"):
+            raise HTTPException(400, "Unsafe actions cannot be approved.")
+        if row["action_type"] in {"send_first_touch", "send_follow_up"}:
+            if not payload.get("recipient"):
+                raise HTTPException(400, "Set and review a recipient before approving this message.")
+            validate_recipient(payload["recipient"], settings)
+            if not payload.get("subject") or not payload.get("body"):
+                raise HTTPException(400, "A subject and message body are required.")
+        try:
+            ApprovalService(store).decide(approval_id, True)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"message": "Approved. The reviewed action is queued; delivery is a separate step."}
 
 
 @app.post("/api/approvals/{approval_id}/reject")
-def reject(approval_id: str, payload: dict) -> dict:
-    container = build_container(Settings())
-    if not container.store.get_approval(approval_id):
-        raise HTTPException(404, "approval not found")
-    reason = str(payload.get("reason", "")).strip()
-    if not reason:
-        raise HTTPException(400, "rejection reason is required")
-    ApprovalService(container.store).decide(approval_id, False, reason)
-    return {"message": "Approval rejected"}
+def reject(approval_id: str, payload: RejectionRequest):
+    with dashboard_store() as (_, store):
+        reason = payload.reason.strip()
+        if not reason:
+            raise HTTPException(400, "A rejection reason is required.")
+        if not store.get_approval(approval_id):
+            raise HTTPException(404, "Approval not found.")
+        try:
+            ApprovalService(store).decide(approval_id, False, reason)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"message": "Rejected. Reason recorded and a proposed lesson saved for review."}
+
+
+@app.patch("/api/{collection}/{item_id}/recipient")
+def set_recipient(collection: str, item_id: str, request: RecipientRequest):
+    if collection not in {"approvals", "outbox"}:
+        raise HTTPException(404, "Action collection not found.")
+    with dashboard_store() as (settings, store):
+        recipient = validate_recipient(request.recipient, settings)
+        with store.connection:
+            row = store.connection.execute(f"SELECT * FROM {collection} WHERE id=?", (item_id,)).fetchone()
+            if not row:
+                raise HTTPException(404, "Action not found.")
+            if row["status"] != "pending":
+                raise HTTPException(409, "Only pending actions can be updated.")
+            if row["action_type"] not in {"send_first_touch", "send_follow_up"}:
+                raise HTTPException(400, "This action does not use an email recipient.")
+            payload = json.loads(row["payload"])
+            if collection == "outbox" and payload.get("recipient"):
+                raise HTTPException(409, "A queued recipient cannot be changed after review.")
+            payload["recipient"] = recipient
+            store.connection.execute(f"UPDATE {collection} SET payload=? WHERE id=? AND status='pending'",
+                                     (json.dumps(payload), item_id))
+            store.connection.execute(
+                "INSERT INTO audit_log(deal_id,actor,action,detail,created_at) VALUES(?,?,?,?,datetime('now'))",
+                (row["deal_id"], "human", "recipient_set", f"{collection}:{item_id} recipient={recipient}"))
+        return {"message": "Recipient saved. Review the message before continuing."}
 
 
 @app.post("/api/outbox/deliver")
-async def deliver() -> dict:
-    container = build_container(Settings())
-    try:
-        fallback = next((item.strip() for item in Settings().mail_allowed_recipients.split(",") if item.strip()), None)
-        delivered = await OutboxDeliveryService(container.store, container.mail, fallback).deliver_pending()
-    except Exception as exc:
-        raise HTTPException(502, f"delivery failed: {exc}") from exc
-    return {"message": f"Delivered {len(delivered)} item(s)", "delivered": delivered}
+async def deliver():
+    if _delivery_lock.locked():
+        raise HTTPException(409, "Delivery is already running. Wait for it to finish.")
+    async with _delivery_lock:
+        container = build_container(Settings())
+        try:
+            if container.store.flag_enabled("global_kill_switch"):
+                raise HTTPException(409, "Emergency stop is active. Queued actions remain pending.")
+            service = OutboxDeliveryService(container.store, container.mail, esign=container.esign)
+            delivered = await service.deliver_pending(continue_on_error=True)
+            return {"message": f"Delivered {len(delivered)} action(s); {len(service.failures)} failed.",
+                    "delivered": delivered, "failures": service.failures}
+        finally:
+            container.store.connection.close()

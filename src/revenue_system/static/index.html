@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Agentic Revenue System</title>
+  <link rel="stylesheet" href="/static/dashboard.css?v=2">
+  <script src="/static/dashboard.js?v=2" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="#overview">Agentic<br>Revenue System<span>Governed revenue operations</span></a>
+      <nav aria-label="Main navigation">
+        <a href="#overview" data-view="overview">Overview</a>
+        <a href="#pipeline" data-view="pipeline">Pipeline</a>
+        <a href="#approvals" data-view="approvals">Approvals</a>
+        <a href="#outbox" data-view="outbox">Outbox</a>
+        <a href="#audit" data-view="audit">Audit trail</a>
+      </nav>
+      <div class="sidebar-note">Operator workspace<span>Review decisions. Trace every action.</span></div>
+    </aside>
+    <main>
+      <header class="top">
+        <div><div class="eyebrow">Operations control center</div><h1 id="page-title">Revenue command center</h1><p id="page-description">Loading workspace...</p></div>
+        <div class="header-actions"><span id="runtime" class="status">Connecting...</span><button type="button" id="refresh" class="button secondary">Refresh</button></div>
+      </header>
+      <div id="emergency" class="banner error" hidden>Emergency stop is active. Queued work is paused.</div>
+      <div id="notice" class="banner" role="status" aria-live="polite" hidden></div>
+      <div class="sync-status" id="sync-status">Loading data...</div>
+      <section id="metrics" class="metrics" aria-label="Workspace totals">
+        <article class="metric-card"><span>Deals</span><strong data-metric="deals">—</strong></article>
+        <article class="metric-card"><span>Pending approvals</span><strong data-metric="pending_approvals">—</strong></article>
+        <article class="metric-card"><span>Outbox pending</span><strong data-metric="outbox_pending">—</strong></article>
+        <article class="metric-card"><span>Audit events</span><strong data-metric="audit_events">—</strong></article>
+        <article class="metric-card"><span>Rejected approvals</span><strong data-metric="rejected_approvals">—</strong></article>
+      </section>
+      <div id="page-view" aria-live="polite"><section class="panel empty">Loading workspace...</section></div>
+    </main>
+  </div>
+  <dialog id="review-dialog" aria-labelledby="review-title">
+    <div class="dialog-heading"><div><div class="eyebrow">Action review</div><h2 id="review-title">Review proposal</h2></div><button type="button" id="close-review" class="button secondary" aria-label="Close review">Close</button></div>
+    <div id="review-content"></div>
+    <p id="review-error" class="form-error" role="alert" hidden></p>
+    <form id="rejection-form" hidden>
+      <label for="rejection-reason">Why are you rejecting this action?</label>
+      <textarea id="rejection-reason" rows="4" maxlength="2000" required placeholder="Describe the change needed or the reason this action should not proceed."></textarea>
+      <p class="hint">The reason is recorded in the audit trail and saved as a proposed lesson for review. It does not change approval rules automatically.</p>
+      <div class="actions"><button type="button" id="cancel-rejection" class="button secondary">Back to review</button><button type="submit" class="button danger">Confirm rejection</button></div>
+    </form>
+    <div id="review-actions" class="dialog-footer"></div>
+  </dialog>
+</body>
+</html>

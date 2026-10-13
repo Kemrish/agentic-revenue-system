@@ -23,6 +23,9 @@ dev = [
 live = [
   "claude-agent-sdk>=0.2.165,<0.3",
 ]
+browser = [
+  "playwright>=1.50,<2.0",
+]
 
 [project.scripts]
 revenue-system = "revenue_system.cli:app"
@@ -37,4 +40,5 @@ packages = ["src/revenue_system"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 asyncio_mode = "auto"
+markers = ["browser: browser interaction tests (requires Playwright and Microsoft Edge)"]
 

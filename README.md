@@ -89,6 +89,43 @@ python -m revenue_system.cli audit <deal-id>
 
 Agents never send approval-gated actions directly. `approvals deliver` sends only approved outbox items and marks them sent only after provider success.
 
+### Operator dashboard
+
+Start `python -m revenue_system.cli ui` and open `http://127.0.0.1:8000`.
+Overview, Pipeline, Approvals, Outbox, and Audit trail have dedicated views; their URL hashes restore the current page after reload.
+All five metric cards are permanent, including rejected approvals. Background refresh updates values without replacing an open review dialog or a draft rejection reason.
+
+In Approvals, choose **Review details** to inspect the company, contact, recipient, subject, complete message, score, and policy reason.
+**Approve and queue** persists that reviewed action. **Reject with reason** opens an in-app form; its explanation is stored with the decision, audit event, and proposed lesson.
+Decision history retains approved and rejected proposals. Decisions cannot be reversed by a stale browser request.
+
+In Outbox, review each pending action. If an older mail action has no recipient, open its details and explicitly save an allowlisted recipient.
+Delivery does not silently choose the first address from the environment. A recipient already attached to a queued action cannot be changed after review.
+Choose **Review delivery batch**, inspect the destinations, then **Deliver approved work**.
+Successful actions are marked sent and retained in delivery history; failures remain pending with visible per-action errors and audit records.
+The kill switch is checked immediately before each delivery, and contract actions use the e-signature adapter.
+
+The dashboard is a local operator application. Authentication, roles, multi-process delivery coordination, and remote deployment hardening remain separate deployment work.
+No new live provider calls are needed to verify the UI: the automated browser workflow uses an isolated database and test mail adapter.
+
+```powershell
+# Core and API regression tests
+python -m pytest -q -m "not browser" -p no:cacheprovider --basetemp .pytest-run-core
+
+# Browser workflow: requires installed Microsoft Edge
+python -m pip install -e ".[dev,browser]"
+python -m pytest -q -m browser -p no:cacheprovider --basetemp .pytest-run-browser
+```
+
+The fixture command `demo --mode replay` uses an in-memory store and does not populate the dashboard database.
+For a live fixture run and UI presentation, select the same database for both commands:
+
+```powershell
+$env:DATABASE_URL="sqlite:///./presentation_demo.db"
+python -m revenue_system.cli demo --mode live
+python -m revenue_system.cli ui
+```
+
 ```powershell
 python -m revenue_system.cli approvals reject <approval-id>
 python -m revenue_system.cli kill-switch --enabled
