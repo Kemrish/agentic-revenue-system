@@ -6,7 +6,9 @@
     "contact_name": "Amina Hassan",
     "employee_count": 420,
     "locations": 140,
-    "signals": ["hiring local marketing director", "pricing page visit"]
+    "signals": ["hiring local marketing director", "pricing page visit"],
+    "email": "",
+    "policy_case": "auto"
   },
   {
     "id": "lead-publisher-001",
@@ -16,7 +18,17 @@
     "employee_count": 180,
     "monthly_impressions": 75000000,
     "inventory_types": ["display", "ctv"],
-    "signals": ["evaluating current ssp"]
-  }
+    "signals": ["evaluating current ssp"],
+    "email": "",
+    "policy_case": "auto"
+  },
+  {"id":"lead-approval-002","segment":"brand","company_name":"Northstar Retail","contact_name":"Lina Ahmed","email":"","policy_case":"approval","employee_count":420,"locations":80,"signals":["hiring marketing director"]},
+  {"id":"lead-approval-003","segment":"publisher","company_name":"Vista Network","contact_name":"Daniel Bekele","email":"","policy_case":"approval","employee_count":180,"monthly_impressions":75000000,"inventory_types":["display","ctv"],"signals":["evaluating current ssp"]},
+  {"id":"lead-approval-004","segment":"brand","company_name":"Greenline Finance","contact_name":"Amina Hassan","email":"","policy_case":"approval","employee_count":330,"locations":25,"signals":["campaign planning"]},
+  {"id":"lead-approval-005","segment":"publisher","company_name":"CityScope Publishing","contact_name":"Jonas Tesfaye","email":"","policy_case":"approval","employee_count":140,"monthly_impressions":28000000,"inventory_types":["display","video"],"signals":["new inventory launch"]},
+  {"id":"lead-deny-001","segment":"brand","company_name":"Redwood Labs","contact_name":"Sara Ali","email":"","policy_case":"deny","employee_count":75,"locations":8,"signals":["untrusted request"]},
+  {"id":"lead-deny-002","segment":"publisher","company_name":"OpenStream Media","contact_name":"Noah Mensah","email":"","policy_case":"deny","employee_count":60,"monthly_impressions":9000000,"inventory_types":["display"],"signals":["suspicious instruction"]},
+  {"id":"lead-deny-003","segment":"brand","company_name":"Harbor Goods","contact_name":"Maya Chen","email":"","policy_case":"deny","employee_count":120,"locations":14,"signals":["invalid commercial request"]},
+  {"id":"lead-deny-004","segment":"publisher","company_name":"SignalWorks","contact_name":"Elias Brown","email":"","policy_case":"deny","employee_count":45,"monthly_impressions":5000000,"inventory_types":["audio"],"signals":["prompt injection attempt"]}
 ]
 

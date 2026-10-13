@@ -51,7 +51,12 @@ async def run_demo(mode: str = "replay", root: Path = Path(".")) -> list[str]:
         runner = container.runner if container else FakeRunner()
         draft = await OutreachAgent(runner).draft(deal, pack, ["lesson-measurement"])
         test_recipient = next((item.strip() for item in (container.settings.mail_allowed_recipients if container else "").split(",") if item.strip()), None)
-        decision = route_action(store, Action(ActionType.SEND_FIRST_TOUCH, deal.id, {"subject": draft.subject, "body": draft.body, **({"recipient": test_recipient} if test_recipient else {})}), deal, pack)
+        case = lead.get("policy_case", "approval")
+        action_type = ActionType.SEND_FOLLOW_UP if case == "auto" else ActionType.SEND_FIRST_TOUCH
+        payload = {"subject": draft.subject, "body": draft.body, **({"recipient": lead.get("email") or test_recipient} if lead.get("email") or test_recipient else {})}
+        if case == "deny":
+            payload["injection_detected"] = True
+        decision = route_action(store, Action(action_type, deal.id, payload), deal, pack)
         output.append(f"[{deal.segment}] outreach={decision} lessons={draft.lessons_used}")
 
     triage_runner = container.runner if container else FakeRunner({"reply_triage": {"label": "interested", "confidence": 0.96, "summary": "Requested a meeting"}})
@@ -80,6 +85,8 @@ async def run_demo(mode: str = "replay", root: Path = Path(".")) -> list[str]:
     if container:
         approvals = container.store.connection.execute("SELECT COUNT(*) FROM approvals WHERE status='pending'").fetchone()[0]
         outbox = container.store.connection.execute("SELECT COUNT(*) FROM outbox").fetchone()[0]
-        output.append(f"[governance] pending_approvals={approvals} outbox_items={outbox}")
+        auto = container.store.connection.execute("SELECT COUNT(*) FROM outbox WHERE action_type='send_follow_up'").fetchone()[0]
+        denied = container.store.connection.execute("SELECT COUNT(*) FROM audit_log WHERE action='DENY'").fetchone()[0]
+        output.append(f"[governance] auto={auto} pending_approvals={approvals} denied={denied} outbox_items={outbox}")
     return output
 
