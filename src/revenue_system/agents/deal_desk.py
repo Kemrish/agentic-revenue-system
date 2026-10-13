@@ -13,7 +13,7 @@ class IODraft(BaseModel):
     budget: float
     start_date: str
     end_date: str
-    line_items: list[dict[str, float | str]]
+    line_items: list[dict[str, float | int | str]]
 
     def as_io_data(self) -> IOData:
         try:

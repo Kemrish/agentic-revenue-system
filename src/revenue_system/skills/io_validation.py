@@ -8,7 +8,7 @@ class IOData:
     budget: float
     start_date: date
     end_date: date
-    line_items: list[dict[str, float | str]]
+    line_items: list[dict[str, float | int | str]]
     date_error: str | None = None
 
 
