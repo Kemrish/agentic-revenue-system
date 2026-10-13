@@ -49,7 +49,7 @@ def overview() -> dict:
     for row in _rows(store, "SELECT id, company_name, contact_name, segment, stage, payload FROM deals ORDER BY updated_at DESC"):
         payload = json.loads(row.pop("payload"))
         score = payload.get("score") or {}
-        deals.append({**row, "score": round(score.get("total", 0)), "tier": score.get("tier", "-"), "stage": row["stage"]})
+        deals.append({"id": row["id"], "company": row["company_name"], "contact": row["contact_name"], "segment": row["segment"], "score": round(score.get("total", 0)), "tier": score.get("tier", "-"), "stage": row["stage"]})
     approvals = _rows(store, "SELECT id, deal_id, action_type FROM approvals WHERE status='pending' ORDER BY created_at DESC")
     outbox = _rows(store, "SELECT id, deal_id, action_type, status FROM outbox WHERE status='pending' ORDER BY created_at DESC")
     audit = _rows(store, "SELECT actor, action, detail, created_at FROM audit_log ORDER BY id DESC LIMIT 20")
