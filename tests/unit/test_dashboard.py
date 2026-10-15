@@ -27,7 +27,7 @@ def operator_workspace(tmp_path, monkeypatch):
 
     mail = Mail()
     monkeypatch.setattr(dashboard, "build_container", lambda _: SimpleNamespace(
-        store=SQLiteStore(url), mail=mail, esign=None))
+        store=SQLiteStore(url), mail=mail, esign=None, crm=None, settings=settings))
     store = SQLiteStore(url)
     store.save_deal(Deal("d1", "brand", "Review Account", "Amina", score=Score(90,80,0,86,Tier.A,"Fit evidence")))
     store.add_approval("a1", Action(ActionType.SEND_FIRST_TOUCH, "d1",
@@ -51,6 +51,23 @@ def test_review_contains_message_and_policy_evidence(operator_workspace):
     assert item["payload"]["recipient"] == "review@example.com"
     assert "tier A" in item["policy_reason"]
     assert client.get("/static/dashboard.js").status_code == 200
+
+
+def test_contract_review_download_is_the_exact_approved_artifact(operator_workspace):
+    from revenue_system.skills.contracts import validate_contract
+    from tests.unit.test_contract_integrity import contract
+    client, store, _ = operator_workspace
+    payload = contract()
+    store.add_approval("contract-1", Action(ActionType.SEND_CONTRACT, "d1", payload))
+    response = client.get("/api/approvals/contract-1/document")
+    assert response.status_code == 200 and response.content == validate_contract(payload)
+    assert response.headers["cache-control"] == "no-store"
+    assert client.post("/api/approvals/contract-1/approve").status_code == 200
+    store.add_approval("legacy-contract", Action(ActionType.SEND_CONTRACT, "d1", {"document": "Unbound"}))
+    assert client.post("/api/approvals/legacy-contract/approve").status_code == 409
+    assert client.get("/api/approvals/legacy-contract/document").status_code == 409
+    assert client.get("/docs").status_code == 404
+    assert client.get("/openapi.json").status_code == 404
 
 
 def test_rejection_requires_reason_and_retains_history(operator_workspace):

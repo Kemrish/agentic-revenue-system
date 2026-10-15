@@ -57,6 +57,9 @@ class SQLiteStore:
             CREATE TABLE IF NOT EXISTS system_flags (
                 name TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 0
             );
+            CREATE TABLE IF NOT EXISTS service_heartbeats (
+                service TEXT PRIMARY KEY, seen_at TEXT NOT NULL
+            );
             CREATE TABLE IF NOT EXISTS timers (
                 id TEXT PRIMARY KEY, deal_id TEXT NOT NULL, event_type TEXT NOT NULL, payload TEXT NOT NULL,
                 due_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'scheduled', created_at TEXT NOT NULL
@@ -285,7 +288,8 @@ class SQLiteStore:
             self.connection.execute("UPDATE timers SET status='fired' WHERE id=?", (row["id"],))
 
     def health(self) -> dict[str, int]:
-        one = lambda query: int(self.connection.execute(query).fetchone()[0])
+        def one(query):
+            return int(self.connection.execute(query).fetchone()[0])
         return {
             "events_pending": one("SELECT COUNT(*) FROM events WHERE status='pending'"),
             "events_dead": one("SELECT COUNT(*) FROM events WHERE status='dead'"),
@@ -296,3 +300,8 @@ class SQLiteStore:
             "approvals_pending": one("SELECT COUNT(*) FROM approvals WHERE status='pending'"),
             "timers_scheduled": one("SELECT COUNT(*) FROM timers WHERE status='scheduled'"),
         }
+
+    def heartbeat(self, service: str = "worker") -> None:
+        self.connection.execute("INSERT INTO service_heartbeats(service,seen_at) VALUES(?,?) ON CONFLICT(service) DO UPDATE SET seen_at=excluded.seen_at",
+                                (service, datetime.now(timezone.utc).isoformat()))
+        self._commit()

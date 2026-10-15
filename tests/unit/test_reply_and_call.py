@@ -1,8 +1,8 @@
 import pytest
 
 from revenue_system.agents.call_intelligence import CallDigest, CallIntelligenceAgent
-from tests.support.agents import FakeRunner
 from revenue_system.agents.reply_triage import ReplyTriageAgent
+from tests.support.agents import FakeRunner
 
 
 @pytest.mark.asyncio

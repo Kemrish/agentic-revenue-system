@@ -1,11 +1,12 @@
-import pytest
 from pathlib import Path
 
-from revenue_system.agents.base import AgentRequest, OutreachDraft
-from tests.support.agents import FakeRunner
+import pytest
+
+from revenue_system.agents.base import OutreachDraft
 from revenue_system.agents.outreach import OutreachAgent
 from revenue_system.domain.models import Deal
 from revenue_system.segments.schema import load_pack
+from tests.support.agents import FakeRunner
 
 
 @pytest.mark.asyncio

@@ -1,21 +1,24 @@
 """Deliver approved outbox actions through injected real adapters."""
 
-import json
 import asyncio
+import json
 from uuid import uuid4
 
-from revenue_system.adapters.db import SQLiteStore, LeaseLostError
+from revenue_system.adapters.db import LeaseLostError, SQLiteStore
+from revenue_system.adapters.errors import AmbiguousDeliveryError
 from revenue_system.domain.models import ActionType
 from revenue_system.skills.contracts import validate_contract
 
 
 class OutboxDeliveryService:
     def __init__(self, store: SQLiteStore, mail, fallback_recipient: str | None = None, esign=None, max_attempts: int = 5,
-                 lease_seconds: int = 300, retry_base_seconds: float = 0) -> None:
+                 lease_seconds: int = 300, retry_base_seconds: float = 0, crm=None, settings=None) -> None:
         self.store = store
         self.mail = mail
         self.fallback_recipient = fallback_recipient
         self.esign = esign
+        self.crm = crm
+        self.settings = settings
         self.max_attempts = max_attempts
         self.lease_seconds = lease_seconds
         self.retry_base_seconds = retry_base_seconds
@@ -44,7 +47,7 @@ class OutboxDeliveryService:
                     self.store.record_outbox_failure(row["id"], "unsafe action", 1)
                     raise PermissionError("Unsafe actions cannot be delivered")
                 deal = self.store.get_deal(row["deal_id"])
-                if deal and "do_not_contact" in deal.flags:
+                if deal and "do_not_contact" in deal.flags and action_type != ActionType.SYNC_CRM:
                     self.store.record_outbox_failure(row["id"], "Contact unsubscribed", 1)
                     raise PermissionError("Contact unsubscribed; delivery is blocked")
                 if action_type in {ActionType.SEND_FIRST_TOUCH, ActionType.SEND_FOLLOW_UP}:
@@ -57,6 +60,15 @@ class OutboxDeliveryService:
                         raise ValueError("e-signature adapter is not configured")
                     validate_contract(payload)
                     provider_id = await asyncio.wait_for(self.esign.send_for_signature(payload, row["id"]), self.lease_seconds * .8)
+                elif action_type == ActionType.SYNC_CRM:
+                    if not self.crm or not self.settings or not self.settings.crm_sync_enabled or not self.settings.live_side_effects_enabled:
+                        raise PermissionError("CRM write-back is not explicitly enabled")
+                    if not deal or str(deal.fields.get("hubspot_contact_id")) != payload.get("contact_id"):
+                        raise ValueError("CRM contact does not match this deal")
+                    properties = {self.settings.hubspot_stage_property: deal.stage}
+                    if deal.score:
+                        properties[self.settings.hubspot_score_property] = str(deal.score.total)
+                    provider_id = await asyncio.wait_for(asyncio.to_thread(self.crm.update_properties, "contacts", payload["contact_id"], properties, "revenue-system"), self.lease_seconds * .8)
                 else:
                     raise ValueError(f"no delivery adapter for action type: {action_type.value}")
                 if not isinstance(provider_id, str) or not provider_id.strip():
@@ -76,7 +88,9 @@ class OutboxDeliveryService:
                 raise
             except Exception as exc:
                 status = self.store.connection.execute("SELECT status FROM outbox WHERE id=?", (row["id"],)).fetchone()["status"]
-                if status in {"pending", "delivering"}:
+                if isinstance(exc, AmbiguousDeliveryError):
+                    status = self.store.record_outbox_failure(row["id"], str(exc), 1)
+                elif status in {"pending", "delivering"}:
                     status = self.store.record_outbox_failure(row["id"], str(exc), self.max_attempts, self.retry_base_seconds)
                 self.store.audit("delivery", "outbox_dead_letter" if status == "failed" else "outbox_failed", f"{row['id']}: {exc}", row["deal_id"])
                 self.failures.append({"id": row["id"], "reason": str(exc)})

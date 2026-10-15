@@ -2,7 +2,6 @@
 
 from revenue_system.agents.base import AgentRequest
 
-
 AGENT_RESPONSES = {
     "reply_triage": {"label":"interested", "confidence":.96, "summary":"Requested a meeting"},
     "call_intelligence": {

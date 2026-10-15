@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 PROMPT_ROOT = Path(__file__).parent / "prompts"
 
 

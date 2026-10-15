@@ -10,6 +10,8 @@ class PolicyEngine:
             return PolicyDecision("DENY", "Contact unsubscribed", "do_not_contact")
         if action.payload.get("unsafe") or action.payload.get("injection_detected"):
             return PolicyDecision("DENY", "Unsafe action or untrusted instruction detected", "unsafe_action")
+        if action.action_type is ActionType.SYNC_CRM:
+            return PolicyDecision("AUTO", "Bounded CRM score/stage synchronization; delivery requires explicit configuration", "crm_sync")
         if action.action_type in {ActionType.CHANGE_PRICING, ActionType.SEND_CONTRACT}:
             return PolicyDecision("REQUIRE_APPROVAL", "Commercial or contract action requires approval", action.action_type.value)
         if action.action_type is ActionType.SEND_FIRST_TOUCH and deal.score and deal.score.tier.value == "A":

@@ -1,9 +1,9 @@
 import pytest
 
-from revenue_system.container import agent_runner, build_container
-from revenue_system.settings import Settings
 from revenue_system.adapters.disabled import DisabledIntegration
 from revenue_system.agents.base import AgentRequest, OutreachDraft
+from revenue_system.container import agent_runner, build_container
+from revenue_system.settings import Settings
 
 
 @pytest.mark.asyncio

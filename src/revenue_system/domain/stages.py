@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-
 STAGES = (
     "new",
     "enriched",

@@ -32,4 +32,4 @@ class TranscriptInput(InboundModel):
 
 class SignatureInput(InboundModel):
     deal_id: str = Field(min_length=1, max_length=200)
-    provider_id: str | None = Field(default=None, max_length=300)
+    provider_id: str = Field(min_length=1, max_length=300)

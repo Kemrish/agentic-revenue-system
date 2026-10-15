@@ -4,9 +4,9 @@ from dataclasses import dataclass
 
 from .adapters.claude_runner import ClaudeRunner
 from .adapters.db import SQLiteStore
+from .adapters.disabled import DisabledIntegration
 from .adapters.esign import DropboxSignAdapter
 from .adapters.fireflies import FirefliesAdapter
-from .adapters.disabled import DisabledIntegration
 from .adapters.hubspot import HubSpotAdapter
 from .adapters.mail import MailAdapter
 from .adapters.openrouter_runner import OpenRouterRunner
@@ -42,6 +42,10 @@ def agent_runner(settings: Settings):
 
 def build_container(settings: Settings | None = None) -> Container:
     selected = settings or Settings()
+    if selected.app_env.lower() == "production":
+        from .operations import configuration_errors
+        if errors := configuration_errors(selected):
+            raise ValueError("Production configuration is incomplete: " + "; ".join(errors))
     live = selected.runtime_mode == "live"
     runner, _ = agent_runner(selected)
     return Container(
@@ -52,6 +56,7 @@ def build_container(settings: Settings | None = None) -> Container:
             selected.mail_api_key, selected.mail_from_address,
             allowed_recipients={v.strip() for v in selected.mail_allowed_recipients.split(",") if v.strip()},
             live_side_effects_enabled=selected.live_side_effects_enabled,
+            reply_domain=selected.mail_reply_domain, thread_secret=selected.mail_thread_secret,
         ) if live and selected.mail_mode == "live" else DisabledIntegration("Mail"),
         transcripts=FirefliesAdapter(selected.fireflies_api_key) if live and selected.fireflies_mode == "live" else DisabledIntegration("Transcripts"),
         esign=DropboxSignAdapter(

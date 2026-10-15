@@ -5,8 +5,8 @@ live Claude runtime. The application only depends on the AgentRunner protocol.
 """
 
 import asyncio
-import logging
 import json
+import logging
 from typing import TypeVar
 
 from pydantic import BaseModel

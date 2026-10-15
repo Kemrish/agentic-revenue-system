@@ -1,7 +1,10 @@
-import json
 import asyncio
+
 import httpx
+
 from revenue_system.skills.contracts import DOCX_TYPE, validate_contract
+
+from .errors import AmbiguousDeliveryError
 
 
 class DropboxSignAdapter:
@@ -33,17 +36,22 @@ class DropboxSignAdapter:
             "metadata[artifact_sha256]": document["artifact_sha256"],
             "test_mode": "1" if self.test_mode else "0",
         }
-        with httpx.Client(timeout=30, follow_redirects=False) as client:
-            response = client.post(f"{self.base_url}/v3/signature_request/send", auth=(self.api_key, ""), data=fields,
-                                   files={"files[0]": ("agreement.docx", artifact, DOCX_TYPE)})
+        try:
+            with httpx.Client(timeout=30, follow_redirects=False) as client:
+                response = client.post(f"{self.base_url}/v3/signature_request/send", auth=(self.api_key, ""), data=fields,
+                                       files={"files[0]": ("agreement.docx", artifact, DOCX_TYPE)})
+        except httpx.TransportError as exc:
+            raise AmbiguousDeliveryError("E-sign transport failure; inspect provider history before retry") from exc
+        if response.status_code >= 500:
+            raise AmbiguousDeliveryError("E-sign provider failed; inspect provider history before retry")
         if response.is_error:
             raise RuntimeError(f"Dropbox Sign rejected request ({response.status_code})")
         try:
             provider_id = response.json()["signature_request"]["signature_request_id"]
         except (ValueError, KeyError, TypeError) as exc:
-            raise RuntimeError("E-sign response omitted its reference; reconcile before retry") from exc
+            raise AmbiguousDeliveryError("E-sign response omitted its reference; reconcile before retry") from exc
         if not isinstance(provider_id, str) or not provider_id.strip():
-            raise RuntimeError("E-sign response omitted its reference; reconcile before retry")
+            raise AmbiguousDeliveryError("E-sign response omitted its reference; reconcile before retry")
         return provider_id
 
     async def verify_completed(self, provider_id: str) -> bool:

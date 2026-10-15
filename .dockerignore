@@ -1,0 +1,14 @@
+.git
+.env
+.env.*
+.venv
+**/__pycache__
+.pytest*
+*.db
+*.db-*
+*.sqlite*
+*.pdf
+data
+backups
+dist
+build

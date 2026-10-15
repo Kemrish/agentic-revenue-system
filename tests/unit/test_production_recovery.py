@@ -3,12 +3,11 @@
 import asyncio
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
 
-from revenue_system.adapters.db import SQLiteStore, LeaseLostError
-from tests.support.agents import FakeRunner
-from tests.support.agents import AGENT_RESPONSES
+from revenue_system.adapters.db import LeaseLostError, SQLiteStore
 from revenue_system.domain.models import Action, ActionType, Deal
 from revenue_system.governance.approvals import ApprovalService
 from revenue_system.governance.policy import PolicyEngine
@@ -17,7 +16,7 @@ from revenue_system.orchestration.events import DomainEvent
 from revenue_system.orchestration.orchestrator import DealOrchestrator
 from revenue_system.orchestration.worker import EventWorker
 from revenue_system.segments.registry import PackRegistry
-from pathlib import Path
+from tests.support.agents import FakeRunner
 
 
 @pytest.fixture

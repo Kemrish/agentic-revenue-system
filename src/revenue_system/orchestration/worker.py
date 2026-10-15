@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from revenue_system.adapters.db import SQLiteStore, LeaseLostError
+from revenue_system.adapters.db import LeaseLostError, SQLiteStore
 from revenue_system.orchestration.events import DomainEvent
 from revenue_system.orchestration.orchestrator import DealOrchestrator
 
@@ -76,6 +76,7 @@ class EventWorker:
                           delivery=None) -> None:
         stop = stop or asyncio.Event()
         while not stop.is_set():
+            self.store.heartbeat()
             result = await self.run_once(orchestrator)
             if delivery is not None:
                 await delivery.deliver_pending(continue_on_error=True)

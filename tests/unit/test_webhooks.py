@@ -88,9 +88,9 @@ def test_unicode_signature_and_oversized_payload_fail_closed(webhook_db, monkeyp
 
 @pytest.mark.asyncio
 async def test_persisted_webhook_runs_through_the_real_worker(webhook_db):
-    from tests.support.agents import FakeRunner
     from revenue_system.orchestration.orchestrator import DealOrchestrator
     from revenue_system.orchestration.worker import EventWorker
+    from tests.support.agents import FakeRunner
 
     client, url = webhook_db
     body, headers = signed(LEAD | {"fit":90,"intent":80,"email":"review@example.com"})

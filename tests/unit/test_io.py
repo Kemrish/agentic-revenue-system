@@ -1,7 +1,7 @@
 from datetime import date
 
-from revenue_system.skills.io_validation import IOData, validate_io
 from revenue_system.agents.deal_desk import IODraft, repair_from_supplied_data
+from revenue_system.skills.io_validation import IOData, validate_io
 
 
 def test_valid_io_passes():

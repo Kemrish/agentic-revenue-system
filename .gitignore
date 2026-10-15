@@ -4,6 +4,14 @@ __pycache__/
 .pytest-tmp/
 .pytest-run-*/
 .env
+.env.*
+!.env.example
+backups/
+data/
+.local-sandbox/
+*.db-wal
+*.db-shm
+*.db-journal
 *.db
 *.sqlite
 *.sqlite3

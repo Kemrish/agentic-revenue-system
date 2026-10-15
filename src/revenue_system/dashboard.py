@@ -2,12 +2,11 @@
 
 import asyncio
 import json
-from uuid import uuid4
+import secrets
 from contextlib import contextmanager
 from pathlib import Path
-
-import secrets
 from urllib.parse import urlsplit
+from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, Response
@@ -17,12 +16,12 @@ from pydantic import BaseModel, Field
 
 from .adapters.db import SQLiteStore
 from .container import build_container
-from .orchestration.orchestrator import DealOrchestrator
-from .orchestration.worker import EventWorker
 from .domain.models import Action, ActionType
 from .governance.approvals import ApprovalService
 from .governance.policy import PolicyEngine
 from .orchestration.delivery import OutboxDeliveryService
+from .orchestration.orchestrator import DealOrchestrator
+from .orchestration.worker import EventWorker
 from .segments.registry import PackRegistry
 from .settings import Settings
 from .skills.contracts import DOCX_TYPE, validate_contract
@@ -51,7 +50,7 @@ def operator(request: Request, credentials: HTTPBasicCredentials | None = Depend
     return f"human:{credentials.username}"
 
 
-app = FastAPI(title="Agentic Revenue System Dashboard", dependencies=[Depends(operator)])
+app = FastAPI(title="Agentic Revenue System Dashboard", dependencies=[Depends(operator)], docs_url=None, redoc_url=None, openapi_url=None)
 ASSETS = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=ASSETS, check_dir=False), name="static")
 _delivery_lock = asyncio.Lock()
@@ -106,7 +105,7 @@ def action_details(store, row):
     if deal:
         decision = PolicyEngine().evaluate(
             Action(ActionType(item["action_type"]), deal.id, item["payload"]),
-            deal, PackRegistry(Path("packs")).get(deal.segment),
+            deal, PackRegistry(Settings().packs_root).get(deal.segment),
         )
         item["policy_reason"] = decision.reason
         item["rule_id"] = decision.rule_id
@@ -152,7 +151,8 @@ def overview():
                    "SELECT * FROM lessons ORDER BY CASE status WHEN 'proposed' THEN 0 WHEN 'active' THEN 1 ELSE 2 END, created_at DESC")]
         decisions = {row["action"]: row["n"] for row in rows(store,
                      "SELECT action, COUNT(*) n FROM audit_log WHERE actor='policy' GROUP BY action")}
-        count = lambda query: store.connection.execute(query).fetchone()[0]
+        def count(query):
+            return store.connection.execute(query).fetchone()[0]
         return {
             "runtime": {"provider": settings.llm_provider, "mode": settings.runtime_mode,
                         "mail_mode": settings.mail_mode, "live_side_effects_enabled": settings.live_side_effects_enabled,
@@ -273,13 +273,14 @@ async def deliver():
         try:
             if container.store.flag_enabled("global_kill_switch"):
                 raise HTTPException(409, "Emergency stop is active. Queued actions remain pending.")
-            service = OutboxDeliveryService(container.store, container.mail, esign=container.esign,
+            service = OutboxDeliveryService(container.store, container.mail, esign=container.esign, crm=container.crm, settings=container.settings,
                                             max_attempts=Settings().max_delivery_attempts,
                                             lease_seconds=Settings().queue_lease_seconds,
                                             retry_base_seconds=Settings().retry_base_seconds)
             delivered = await service.deliver_pending(continue_on_error=True)
             # Apply delivery outcomes to deal stages now; agent-backed events stay with the worker.
-            await EventWorker(container.store).run_once(DealOrchestrator(container.store), {"action.delivered"})
+            await EventWorker(container.store).run_once(DealOrchestrator(container.store, container.settings.packs_root,
+                       crm_sync_enabled=container.settings.crm_sync_enabled), {"action.delivered"})
             return {"message": f"Delivered {len(delivered)} action(s); {len(service.failures)} failed.",
                     "delivered": delivered, "failures": service.failures}
         finally:

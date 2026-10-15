@@ -10,13 +10,21 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import ValidationError
 
 from revenue_system.adapters.db import SQLiteStore
+from revenue_system.governance.ingress import (
+    LeadInput,
+    ReplyInput,
+    SignatureInput,
+    TranscriptInput,
+)
 from revenue_system.governance.webhook_security import verify_hmac
-from revenue_system.governance.ingress import LeadInput, ReplyInput, TranscriptInput, SignatureInput
 from revenue_system.segments.registry import PackRegistry
-from pathlib import Path
 from revenue_system.settings import Settings
 
-app = FastAPI(title="Agentic Revenue System Webhooks")
+from .provider_webhooks import router as provider_router
+
+app = FastAPI(title="Agentic Revenue System Webhooks", docs_url=None, redoc_url=None, openapi_url=None)
+
+app.include_router(provider_router)
 
 # source -> (event type, body fields that may carry the provider event id, required payload fields)
 SOURCES = {
@@ -61,7 +69,7 @@ async def accept(source: str, request: Request, event_id: str | None, signature:
     try:
         body = MODELS[source].model_validate(body).model_dump()
         if source == "hubspot":
-            PackRegistry(Path("packs")).get(body["segment"])
+            PackRegistry(settings.packs_root).get(body["segment"])
     except (ValidationError, KeyError) as exc:
         raise HTTPException(422, "Invalid event fields or unknown segment; check the normalized webhook contract.") from exc
     store = SQLiteStore(settings.database_url)

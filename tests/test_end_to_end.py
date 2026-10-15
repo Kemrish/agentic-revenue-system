@@ -8,7 +8,7 @@ from revenue_system.orchestration.delivery import OutboxDeliveryService
 from revenue_system.orchestration.events import DomainEvent
 from revenue_system.orchestration.orchestrator import DealOrchestrator
 from revenue_system.orchestration.worker import EventWorker
-from tests.support.agents import FakeRunner, AGENT_RESPONSES
+from tests.support.agents import AGENT_RESPONSES, FakeRunner
 
 
 @pytest.mark.asyncio

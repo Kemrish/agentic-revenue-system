@@ -16,5 +16,5 @@ worker:
 	python -m revenue_system.cli worker
 
 lint:
-	ruff check .
+	ruff check src tests --select E4,E7,E9,F,I
 

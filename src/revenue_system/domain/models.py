@@ -18,6 +18,7 @@ class ActionType(StrEnum):
     CHANGE_PRICING = "change_pricing"
     GENERATE_IO = "generate_io"
     SEND_CONTRACT = "send_contract"
+    SYNC_CRM = "sync_crm"
 
 
 @dataclass

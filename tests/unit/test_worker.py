@@ -4,13 +4,12 @@ from pathlib import Path
 import pytest
 
 from revenue_system.adapters.db import SQLiteStore
-from tests.support.agents import FakeRunner
-from tests.support.agents import AGENT_RESPONSES
 from revenue_system.domain.models import Action, ActionType
 from revenue_system.orchestration.delivery import OutboxDeliveryService
 from revenue_system.orchestration.events import DomainEvent
 from revenue_system.orchestration.orchestrator import DealOrchestrator
 from revenue_system.orchestration.worker import EventWorker
+from tests.support.agents import AGENT_RESPONSES, FakeRunner
 
 LEAD = {"lead_id": "d1", "segment": "brand", "company_name": "Example Foods", "contact_name": "Amina", "fit": 88, "intent": 70, "engagement": 0}
 TERMS = {"legal_entity": "Example Foods", "budget": "250000", "start_date": "2026-11-01", "end_date": "2027-01-31",
@@ -78,7 +77,7 @@ async def test_full_lifecycle_runs_through_events(system):
             return "envelope-1"
 
     await OutboxDeliveryService(store, mail=None, esign=ESign()).deliver_pending()
-    worker.ingest(DomainEvent("contract.signed", "signed", {"deal_id": "d1"}))
+    worker.ingest(DomainEvent("contract.signed", "signed", {"deal_id": "d1", "provider_id": "envelope-1"}))
     await worker.run_once(orchestrator)
     assert store.get_deal("d1").stage == "closed_won"
 
