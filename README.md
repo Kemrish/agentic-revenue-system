@@ -28,7 +28,7 @@ Read the [architecture](docs/architecture.md), [decisions and trade-offs](docs/d
 
 ## Quick start
 
-Requires Python 3.11+.
+Requires Python 3.12+.
 
 ```powershell
 python -m pip install -e ".[dev]"
@@ -169,6 +169,8 @@ The suite covers scoring, transitions, policy, approvals, outbox delivery, mail/
 
 ## Production deployment notes
 
+See the [production hardening and operations runbook](docs/production.md) for the completed durable webhook/worker path, authenticated operator access, queue leases, retry recovery, deployment commands, and remaining integration boundaries.
+
 The current repository is demo-ready and intentionally simple. Before operating at production scale:
 
 1. replace SQLite with PostgreSQL;
@@ -185,3 +187,4 @@ The current repository is demo-ready and intentionally simple. Before operating 
 - [Decisions and trade-offs](docs/decisions.md)
 - [Implementation plan](docs/implementation.md)
 - [Demo script](docs/demo-script.md)
+- [Production operations and release limitations](docs/production.md)
