@@ -10,7 +10,7 @@ import secrets
 from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -25,6 +25,7 @@ from .governance.policy import PolicyEngine
 from .orchestration.delivery import OutboxDeliveryService
 from .segments.registry import PackRegistry
 from .settings import Settings
+from .skills.contracts import DOCX_TYPE, validate_contract
 
 _basic = HTTPBasic(auto_error=False)
 
@@ -180,6 +181,22 @@ def overview():
 def healthz():
     with dashboard_store() as (_, store):
         return {"status": "ok", "kill_switch": store.flag_enabled("global_kill_switch"), "queues": store.health()}
+
+
+@app.get("/api/{collection}/{item_id}/document")
+def download_contract(collection: str, item_id: str):
+    if collection not in {"approvals", "outbox"}:
+        raise HTTPException(404, "Unknown action collection")
+    with dashboard_store() as (_, store):
+        row = store.connection.execute(f"SELECT payload,action_type FROM {collection} WHERE id=?", (item_id,)).fetchone()
+        if not row or row["action_type"] != "send_contract":
+            raise HTTPException(404, "Contract not found")
+        try:
+            artifact = validate_contract(json.loads(row["payload"]))
+        except ValueError as exc:
+            raise HTTPException(409, "Contract must be regenerated and reviewed") from exc
+        return Response(artifact, media_type=DOCX_TYPE,
+                        headers={"Content-Disposition": 'attachment; filename="agreement.docx"', "Cache-Control": "no-store"})
 
 
 @app.post("/api/approvals/{approval_id}/approve")

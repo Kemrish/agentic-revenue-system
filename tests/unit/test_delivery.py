@@ -53,12 +53,14 @@ async def test_delivery_itself_enforces_kill_switch(tmp_path):
 
 @pytest.mark.asyncio
 async def test_contract_delivery_uses_esign_adapter(tmp_path):
+    from tests.unit.test_contract_integrity import contract
     store = SQLiteStore(f"sqlite:///{tmp_path / 'esign-delivery.db'}")
-    store.add_outbox_once("contract", Action(ActionType.SEND_CONTRACT, "d1", {"document":"Agreement"}))
+    payload = contract()
+    store.add_outbox_once("contract", Action(ActionType.SEND_CONTRACT, "d1", payload))
 
     class ESign:
         async def send_for_signature(self, document, key):
-            assert document == "Agreement"
+            assert document == payload
             return "signature-1"
 
     assert await OutboxDeliveryService(store, FakeMail(), esign=ESign()).deliver_pending() == ["contract"]

@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from revenue_system.adapters.db import SQLiteStore, LeaseLostError
 from revenue_system.domain.models import ActionType
+from revenue_system.skills.contracts import validate_contract
 
 
 class OutboxDeliveryService:
@@ -54,9 +55,12 @@ class OutboxDeliveryService:
                 elif action_type == ActionType.SEND_CONTRACT:
                     if self.esign is None:
                         raise ValueError("e-signature adapter is not configured")
-                    provider_id = await asyncio.wait_for(self.esign.send_for_signature(payload.get("document", ""), row["id"]), self.lease_seconds * .8)
+                    validate_contract(payload)
+                    provider_id = await asyncio.wait_for(self.esign.send_for_signature(payload, row["id"]), self.lease_seconds * .8)
                 else:
                     raise ValueError(f"no delivery adapter for action type: {action_type.value}")
+                if not isinstance(provider_id, str) or not provider_id.strip():
+                    raise ValueError("Provider did not return a delivery reference")
                 with self.store.transaction():
                     self.store.assert_claim("outbox", row["id"], self.owner)
                     self.store.mark_outbox_sent(row["id"], str(provider_id))

@@ -9,6 +9,7 @@ from .base import AgentRequest, AgentRunner
 
 
 class IODraft(BaseModel):
+    model_config = {"allow_inf_nan": False}
     legal_entity: str
     budget: float
     start_date: str
@@ -49,11 +50,9 @@ def repair_from_supplied_data(draft: IODraft, supplied: dict) -> IODraft:
     """
     updates: dict[str, object] = {}
     for field in ("legal_entity", "start_date", "end_date"):
-        if not getattr(draft, field) and supplied.get(field):
-            updates[field] = supplied[field]
-    if supplied.get("budget") is not None:
-        updates["budget"] = float(supplied["budget"])
-    if supplied.get("line_items"):
-        updates["line_items"] = supplied["line_items"]
-    return draft.model_copy(update=updates)
+        updates[field] = supplied.get(field) or ""
+    updates["budget"] = supplied.get("budget") or 0
+    updates["line_items"] = supplied.get("line_items") or []
+    # Revalidate: model_copy(update=...) does not validate new values.
+    return IODraft.model_validate(draft.model_dump() | updates)
 

@@ -31,7 +31,8 @@ async def test_lead_to_verified_signature_for_each_segment(tmp_path, segment):
 
     class ESign:
         async def send_for_signature(self, document, key):
-            assert document and "250,000.00" in document and "Account" in document
+            assert "250,000.00" in document["document"] and "Account" in document["document"]
+            assert document["signer_email"] == "contact@example.com"
             return "signature-1"
 
     delivery = OutboxDeliveryService(store, Mail(), esign=ESign())

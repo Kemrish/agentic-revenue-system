@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     esign_signer_email: str = ""
     esign_signer_name: str = ""
     esign_test_mode: bool = True
+    esign_allowed_recipients: str = ""
     webhook_secret: str = ""
     dashboard_username: str = "operator"
     dashboard_password: str = ""

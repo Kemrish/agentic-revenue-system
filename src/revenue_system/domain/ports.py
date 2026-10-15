@@ -17,7 +17,7 @@ class TranscriptPort(Protocol):
 
 
 class ESignPort(Protocol):
-    async def send_for_signature(self, document: str, idempotency_key: str) -> str: ...
+    async def send_for_signature(self, document: dict, idempotency_key: str) -> str: ...
 
 
 class DealRepository(Protocol):

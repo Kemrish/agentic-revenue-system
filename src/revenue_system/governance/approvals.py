@@ -3,6 +3,7 @@ import json
 from revenue_system.adapters.db import SQLiteStore
 from revenue_system.domain.models import Action
 from revenue_system.orchestration.events import DomainEvent
+from revenue_system.skills.contracts import validate_contract
 
 
 class ApprovalService:
@@ -26,6 +27,8 @@ class ApprovalService:
                 raise ValueError("Approval not found")
             if approved:
                 payload = json.loads(row["payload"])
+                if row["action_type"] == "send_contract":
+                    validate_contract(payload)
                 deal = self.store.get_deal(row["deal_id"])
                 if payload.get("unsafe") or payload.get("injection_detected") or (deal and "do_not_contact" in deal.flags):
                     raise ValueError("Unsafe or unsubscribed contact actions cannot be approved")

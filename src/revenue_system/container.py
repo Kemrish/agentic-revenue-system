@@ -58,6 +58,7 @@ def build_container(settings: Settings | None = None) -> Container:
             selected.esign_api_key, selected.esign_base_url, selected.esign_document_url,
             selected.esign_signer_email, selected.esign_signer_name,
             selected.live_side_effects_enabled, selected.esign_test_mode,
+            allowed_recipients={v.strip() for v in selected.esign_allowed_recipients.split(",") if v.strip()},
         ) if live and selected.esign_mode == "live" else DisabledIntegration("E-signature"),
         crm=HubSpotAdapter(selected.hubspot_access_token) if live and selected.hubspot_mode == "live" else None,
     )

@@ -32,5 +32,8 @@ class MailAdapter:
         except HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[:500]
             raise RuntimeError(f"Mail provider rejected request ({exc.code}): {detail}") from exc
-        return str(payload.get("id", idempotency_key))
+        provider_id = payload.get("id")
+        if not isinstance(provider_id, str) or not provider_id.strip():
+            raise RuntimeError("Mail provider response omitted its delivery reference; reconcile before retry")
+        return provider_id
 

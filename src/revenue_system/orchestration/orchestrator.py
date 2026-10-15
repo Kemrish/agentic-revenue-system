@@ -15,6 +15,7 @@ from revenue_system.skills.io_validation import validate_io
 from revenue_system.skills.scoring import calculate_score
 from revenue_system.skills.templating import TemplateRenderer
 from revenue_system.skills.tracking import check_stall
+from revenue_system.skills.contracts import bind_contract
 
 # Engagement evidence implied by each reply label (0-100, same scale as fit and intent).
 ENGAGEMENT_BY_REPLY = {"interested": 80, "objection": 40, "not_now": 25, "unsubscribe": 0, "suspicious": 0}
@@ -217,7 +218,9 @@ class DealOrchestrator:
         rendered = TemplateRenderer(self.packs_root).render(f"{pack.segment}/{pack.templates.contract}",
                                                              {**io_draft.model_dump(), "line_items": io_draft.line_items})
         deal = self.advance(deal.id, "proposal", "IO generated and validated")
-        route_action(self.store, Action(ActionType.SEND_CONTRACT, deal.id, {"document": rendered, **io_draft.model_dump()}), deal, pack)
+        contract = bind_contract({"document": rendered, **io_draft.model_dump()},
+                                 deal.fields.get("email", ""), deal.contact_name)
+        route_action(self.store, Action(ActionType.SEND_CONTRACT, deal.id, contract), deal, pack)
         return deal
 
     def _on_delivered(self, event: DomainEvent) -> Deal:
