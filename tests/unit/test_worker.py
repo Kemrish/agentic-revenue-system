@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 
 from revenue_system.adapters.db import SQLiteStore
-from revenue_system.agents.execution import FakeRunner
-from revenue_system.agents.replay_responses import DEMO_RESPONSES
+from tests.support.agents import FakeRunner
+from tests.support.agents import AGENT_RESPONSES
 from revenue_system.domain.models import Action, ActionType
 from revenue_system.orchestration.delivery import OutboxDeliveryService
 from revenue_system.orchestration.events import DomainEvent
@@ -20,7 +20,7 @@ TERMS = {"legal_entity": "Example Foods", "budget": "250000", "start_date": "202
 @pytest.fixture
 def system(tmp_path):
     store = SQLiteStore(f"sqlite:///{tmp_path / 'worker.db'}")
-    return store, EventWorker(store, max_attempts=2), DealOrchestrator(store, Path("packs"), FakeRunner(DEMO_RESPONSES))
+    return store, EventWorker(store, max_attempts=2), DealOrchestrator(store, Path("packs"), FakeRunner(AGENT_RESPONSES))
 
 
 @pytest.mark.asyncio

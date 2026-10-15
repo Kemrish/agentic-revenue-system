@@ -1,4 +1,4 @@
-.PHONY: setup test demo demo-replay lint
+.PHONY: setup test lint validate ui worker
 
 setup:
 	python -m pip install -e ".[dev]"
@@ -6,11 +6,14 @@ setup:
 test:
 	python -m pytest
 
-demo:
-	python -m revenue_system.cli demo --mode live
+validate:
+	python -m revenue_system.cli validate-packs
 
-demo-replay:
-	python -m revenue_system.cli demo --mode replay
+ui:
+	python -m revenue_system.cli ui
+
+worker:
+	python -m revenue_system.cli worker
 
 lint:
 	ruff check .

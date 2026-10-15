@@ -10,7 +10,11 @@ __pycache__/
 dist/
 build/
 *.egg-info/
-docs/*.pdf
+*.pdf
+/fixtures/
+/scripts/create_*_pdf.py
+/docs/demo-script.md
+/docs/*task*.md
 .coverage
 htmlcov/
 

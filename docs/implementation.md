@@ -1,86 +1,38 @@
-# Implementation Plan
+# Implementation
 
-## Principles
+## Runtime layout
 
-1. Build the deterministic core before live integrations.
-2. Keep all external dependencies behind ports.
-3. Make the happy path and safety path visible in the CLI.
-4. Prove both segments with the same end-to-end test.
-5. Do not allow credentials or generated databases into Git.
+| Package | Responsibility |
+|---|---|
+| `domain` | Typed actions, deal data, ports, and stage transitions |
+| `orchestration` | Durable event processing, lifecycle handlers, timers, outbox delivery |
+| `governance` | Autonomy policy, approvals, consent/safety checks, ingress validation |
+| `agents` | Typed reasoning tasks, versioned prompts, runner/recording boundaries |
+| `skills` | Deterministic scoring, IO validation, rendering, tracking, lessons |
+| `segments` | Validated YAML packs for each segment |
+| `adapters` | SQLite persistence and live provider boundaries |
+| `static` | Operator dashboard assets |
+| `tests/support` | Isolated model and provider test doubles |
 
-## Build phases
+## Execution
 
-### Phase 0: Repository foundation
+1. CLI import or the signed gateway records an idempotent event.
+2. A worker acquires a database lease for the event.
+3. The orchestrator invokes the applicable agent and deterministic skills.
+4. State changes, action routing, audit records, and event acknowledgement commit together.
+5. Low-risk work enters the outbox; high-risk work awaits a human decision.
+6. A delivery process claims permitted work, rechecks safety/consent, and calls the configured provider.
+7. Provider evidence and an `action.delivered` event are committed with sent status.
+8. Delivery and verified signature events advance the deal through guarded stages.
 
-- package configuration and tooling;
-- folder structure;
-- settings and dependency container;
-- domain models and ports;
-- pack schema and registry;
-- documentation.
+Models run before business writes where possible. Expired claims cannot acknowledge a newer owner's work. Failed work has bounded attempts, a persisted error, and exponential retry timing. SLA timers are stored in the same operational database.
 
-### Phase 1: Durable deterministic core
+## Boundaries
 
-- SQLite schema and repositories;
-- event ingestion and idempotency;
-- state machine and guards;
-- worker and timers;
-- policy engine;
-- approvals, outbox, audit, kill switch;
-- scoring and IO validation.
+The webhook receiver accepts normalized internal contracts rather than arbitrary native provider payloads. External gateways must verify provider-specific signatures and map identifiers before signing the normalized request. Agents propose content; they do not own approvals or delivery.
 
-### Phase 2: Fixture/replay vertical slice
+Brand and publisher packs supply scoring weights, qualification fields, messaging, contract templates, and stage SLAs. Tests exercise both segments through the same lead-to-signature workflow. Non-live integration modes fail explicitly; test doubles are injected by tests only.
 
-- fixture adapters in production code;
-- fake and replay agent runners;
-- brand and publisher packs;
-- lead, reply, transcript, and IO fixtures;
-- full CLI demo;
-- end-to-end test for both segments.
+## Verification and deployment
 
-### Phase 3: Claude Agent SDK
-
-- scoped MCP tools;
-- versioned prompts;
-- asynchronous Claude runner;
-- schema validation, retry, recording, and replay hash checks.
-
-### Phase 4: Live adapters
-
-- HubSpot sandbox adapter;
-- sandbox email adapter with recipient allowlist;
-- Fireflies webhook and fetch adapter;
-- e-signature adapter and signed webhook handler.
-
-## Demo acceptance criteria
-
-- A new brand lead is enriched and scored.
-- The score includes fit, intent, engagement, tier, and a human-readable reason.
-- A top-tier first touch enters approval rather than sending immediately.
-- Approval resumes the paused workflow.
-- A reply is classified, including a prompt-injection fixture that cannot trigger tools.
-- A transcript updates qualification fields and creates a proposed lesson.
-- A later draft cites the lesson.
-- An IO is generated from typed deal data and passes validation.
-- A publisher run uses a different pack without agent code changes.
-- Duplicate events do not duplicate work.
-- The demo can run in replay mode without network access.
-
-## Commands planned
-
-```text
-python -m revenue_system.cli validate-packs
-python -m revenue_system.cli ingest lead --file fixtures/leads.json
-python -m revenue_system.cli run
-python -m revenue_system.cli approvals list
-python -m revenue_system.cli approvals approve <approval-id>
-python -m revenue_system.cli approvals deliver
-python -m revenue_system.cli kill-switch on
-python -m revenue_system.cli demo --mode replay
-python -m pytest
-```
-
-## Live integration boundary
-
-The first live integrations implement only the operations required by the use cases. They do not attempt to wrap entire vendor APIs. Each adapter normalizes vendor payloads into domain objects and translates domain commands back into vendor requests.
-
+See [README](../README.md) for installation and commands, [architecture](architecture.md) for component boundaries, and [production operations](production.md) for settings, recovery, deployment limitations, and release checks.

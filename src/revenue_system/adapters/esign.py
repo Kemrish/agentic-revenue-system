@@ -27,13 +27,13 @@ class DropboxSignAdapter:
         auth = base64.b64encode(f"{self.api_key}:".encode()).decode()
         fields = urlencode({
             "file_urls[]": self.document_url,
-            "title": "Agentic Revenue System demo agreement",
-            "subject": "Please review and sign the demo agreement",
-            "message": "This is a fictional demo agreement for testing.",
+            "title": "Revenue agreement",
+            "subject": "Please review and sign your agreement",
+            "message": "Review the agreement and complete the requested signature fields.",
             "signers[0][email_address]": self.signer_email,
             "signers[0][name]": self.signer_name,
             "signers[0][order]": "0",
-            "metadata[demo_id]": idempotency_key,
+            "metadata[action_id]": idempotency_key,
             "test_mode": "1" if self.test_mode else "0",
         }).encode()
         request = Request(

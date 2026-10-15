@@ -141,7 +141,7 @@ The policy engine is the authoritative safety boundary. SDK tool restrictions ar
 
 ## 10. Runtime modes
 
-The container can independently select live, replay, record, or test implementations for each integration. Replay recordings are versioned by prompt/model/input hash; stale recordings fail clearly rather than silently returning the wrong answer.
+The container enables integrations independently through explicit live modes. Disabled integrations refuse execution; tests inject their own doubles under `tests/support`. Recording/replay primitives support controlled evaluation of actual saved agent responses; the runtime contains no canned response dataset.
 
 ## 11. Scaling path
 

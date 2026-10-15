@@ -4,7 +4,6 @@ import typer
 import asyncio
 import json
 from pathlib import Path
-from .orchestration.demo_flow import run_demo
 from .container import agent_runner, build_container
 from .governance.approvals import ApprovalService
 from .orchestration.delivery import OutboxDeliveryService
@@ -18,13 +17,6 @@ from .settings import Settings
 from .governance.ingress import LeadInput
 
 app = typer.Typer(help="Agentic Revenue System CLI")
-
-
-@app.command()
-def demo(mode: str = typer.Option("replay", help="live, record, replay, or test")) -> None:
-    """Run the end-to-end demonstration."""
-    for line in asyncio.run(run_demo(mode)):
-        typer.echo(line)
 
 
 @app.command("validate-packs")

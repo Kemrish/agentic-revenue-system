@@ -10,7 +10,6 @@ def isolated_runtime(tmp_path, monkeypatch):
         "RUNTIME_MODE": "test", "CLAUDE_MODE": "test", "LLM_PROVIDER": "replay",
         "MAIL_MODE": "test", "ESIGN_MODE": "test", "HUBSPOT_MODE": "test", "FIREFLIES_MODE": "test",
         "LIVE_SIDE_EFFECTS_ENABLED": "false", "DASHBOARD_PASSWORD": "", "WEBHOOK_SECRET": "",
-        "DEMO_ENABLED": "true",
     }
     for name, value in defaults.items():
         monkeypatch.setenv(name, value)

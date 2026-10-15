@@ -12,7 +12,7 @@ Accepted trade-off: a new lifecycle path requires code. The initial lifecycle is
 
 Chosen over microservices.
 
-Reason: one deployable process is easier to run, test, and demonstrate. Internal ports and module boundaries preserve a future service split.
+Reason: one codebase is easier to operate and test. Internal ports and module boundaries preserve a future service split.
 
 Accepted trade-off: less independent scaling. This is appropriate for the expected low-volume, long-running revenue workflow.
 
@@ -24,11 +24,11 @@ Reason: durable local state, approvals, timers, outbox, and audit without extern
 
 Accepted trade-off: limited concurrency. Repository and event-store ports preserve the migration path.
 
-## Decision 004: Real adapters with replay fallback
+## Decision 004: Explicit integration activation
 
-Claude and integration adapters are implemented behind ports. Live credentials are optional per adapter; fixture/replay adapters provide deterministic development and demo recovery.
+Claude and integration adapters are implemented behind ports. Inactive integrations refuse execution explicitly. Provider and model doubles are injected by automated tests and live under `tests/support`.
 
-Reason: real integrations prove the architecture, while public webhook and signature dependencies must not make the 15-minute demo fail.
+Reason: an unconfigured provider must never appear to have delivered an action successfully. Tests remain isolated without shipping synthetic runtime behavior.
 
 ## Decision 005: Typed proposals, not agent side effects
 
@@ -64,7 +64,7 @@ Reason: dependency inversion is a core quality criterion and allows live, replay
 
 We defer Temporal, Kafka, Redis, microservices, vector databases, and a full frontend.
 
-Reason: they do not improve the scored vertical slice enough to justify operational and demo risk.
+Reason: the current workload does not justify their operational cost. Introduce them when measured throughput and availability requirements require them.
 
 ## Risks and mitigations
 
@@ -78,5 +78,5 @@ Reason: they do not improve the scored vertical slice enough to justify operatio
 | Human/agent conflict | Property-level CRM writes and source provenance |
 | Bad segment pack | Startup validation and pack contract tests |
 | Runaway sends | Policy caps and kill switch |
-| Demo vendor outage | Replay mode and recorded responses |
+| Vendor outage | Persistent retry backoff, bounded attempts, operator recovery |
 

@@ -19,7 +19,6 @@ from .adapters.db import SQLiteStore
 from .container import build_container
 from .orchestration.orchestrator import DealOrchestrator
 from .orchestration.worker import EventWorker
-from .demo_api import router as demo_router
 from .domain.models import Action, ActionType
 from .governance.approvals import ApprovalService
 from .governance.policy import PolicyEngine
@@ -54,7 +53,6 @@ def operator(request: Request, credentials: HTTPBasicCredentials | None = Depend
 app = FastAPI(title="Agentic Revenue System Dashboard", dependencies=[Depends(operator)])
 ASSETS = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=ASSETS, check_dir=False), name="static")
-app.include_router(demo_router)
 _delivery_lock = asyncio.Lock()
 
 
@@ -158,7 +156,6 @@ def overview():
             "runtime": {"provider": settings.llm_provider, "mode": settings.runtime_mode,
                         "mail_mode": settings.mail_mode, "live_side_effects_enabled": settings.live_side_effects_enabled,
                         "kill_switch": store.flag_enabled("global_kill_switch"),
-                        "demo_enabled": settings.demo_enabled and settings.app_env.lower() != "production",
                         "allowed_recipients": [v.strip() for v in settings.mail_allowed_recipients.split(",") if v.strip()]},
             "metrics": {"deals": len(deals), "pending_approvals": len(approvals),
                         "rejected_approvals": store.rejected_approvals_count(),

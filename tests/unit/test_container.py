@@ -1,23 +1,27 @@
-from revenue_system.container import build_container
+import pytest
+
+from revenue_system.container import agent_runner, build_container
 from revenue_system.settings import Settings
-from revenue_system.adapters.fixtures.mail import FixtureMailAdapter
+from revenue_system.adapters.disabled import DisabledIntegration
+from revenue_system.agents.base import AgentRequest, OutreachDraft
 
 
-def test_replay_container_uses_fixture_side_effects():
-    container = build_container(Settings(runtime_mode="replay"))
-    assert isinstance(container.mail, FixtureMailAdapter)
-    assert container.crm is None
-
-
-def test_replay_runner_supports_all_demo_agents_without_provider_calls(tmp_path):
-    import asyncio
-    from revenue_system.agents.base import AgentRequest
-    from revenue_system.agents.reply_triage import ReplyClassification
-
-    container = build_container(Settings(_env_file=None, runtime_mode="replay", database_url=f"sqlite:///{tmp_path / 'container.db'}"))
+@pytest.mark.asyncio
+async def test_non_live_container_refuses_side_effects():
+    container = build_container(Settings(runtime_mode="test"))
     try:
-        result = asyncio.run(container.runner.run(AgentRequest("reply_triage","Classify",{}), ReplyClassification))
-        assert result.label == "interested"
+        assert isinstance(container.mail, DisabledIntegration)
+        assert container.crm is None
+        with pytest.raises(RuntimeError, match="disabled"):
+            await container.mail.send("a@example.com", "Subject", "Body", "id")
+        with pytest.raises(RuntimeError, match="disabled"):
+            await container.esign.send_for_signature("Agreement", "id")
+        with pytest.raises(RuntimeError, match="disabled"):
+            await container.runner.run(AgentRequest("outreach", "Draft", {}), OutreachDraft)
     finally:
         container.store.connection.close()
 
+
+def test_non_live_runner_is_reported_as_disabled():
+    _, mode = agent_runner(Settings(runtime_mode="test"))
+    assert mode == "disabled"

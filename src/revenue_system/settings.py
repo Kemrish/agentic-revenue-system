@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     esign_mode: RuntimeMode = "replay"
     hubspot_access_token: str = ""
     mail_api_key: str = ""
-    mail_from_address: str = "demo@example.invalid"
+    mail_from_address: str = ""
     fireflies_api_key: str = ""
     esign_api_key: str = ""
     esign_base_url: str = "https://api.hellosign.com"
@@ -42,7 +42,6 @@ class Settings(BaseSettings):
     retry_base_seconds: float = Field(default=5, ge=0, le=3600)
     queue_lease_seconds: int = Field(default=300, ge=60, le=3600)
     webhook_max_bytes: int = Field(default=1048576, ge=1024, le=10485760)
-    demo_enabled: bool = True
     live_side_effects_enabled: bool = False
     mail_allowed_recipients: str = ""
 

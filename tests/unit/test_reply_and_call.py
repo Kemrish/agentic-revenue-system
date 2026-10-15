@@ -1,7 +1,7 @@
 import pytest
 
 from revenue_system.agents.call_intelligence import CallDigest, CallIntelligenceAgent
-from revenue_system.agents.execution import FakeRunner
+from tests.support.agents import FakeRunner
 from revenue_system.agents.reply_triage import ReplyTriageAgent
 
 

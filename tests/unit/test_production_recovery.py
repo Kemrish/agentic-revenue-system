@@ -7,13 +7,12 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from revenue_system.adapters.db import SQLiteStore, LeaseLostError
-from revenue_system.agents.execution import FakeRunner
-from revenue_system.agents.replay_responses import DEMO_RESPONSES
+from tests.support.agents import FakeRunner
+from tests.support.agents import AGENT_RESPONSES
 from revenue_system.domain.models import Action, ActionType, Deal
 from revenue_system.governance.approvals import ApprovalService
 from revenue_system.governance.policy import PolicyEngine
 from revenue_system.orchestration.delivery import OutboxDeliveryService
-from revenue_system.orchestration.demo_flow import run_pipeline
 from revenue_system.orchestration.events import DomainEvent
 from revenue_system.orchestration.orchestrator import DealOrchestrator
 from revenue_system.orchestration.worker import EventWorker
@@ -197,19 +196,21 @@ def test_approval_joins_outer_transaction(stores):
 
 
 @pytest.mark.asyncio
-async def test_demo_resumes_after_interrupted_drafting(stores):
+async def test_worker_resumes_after_interrupted_drafting(stores):
     first, _ = stores
 
     class FailingRunner(FakeRunner):
         async def run(self, request, output_type):
             raise RuntimeError("model temporarily unavailable")
 
-    with pytest.raises(RuntimeError, match="temporarily unavailable"):
-        await run_pipeline(first, FailingRunner())
+    worker = EventWorker(first)
+    worker.ingest(DomainEvent("lead.created", "lead-1", {"lead_id":"account-1", "segment":"brand",
+                  "company_name":"Account", "contact_name":"Amina", "fit":90, "intent":80}))
+    assert (await worker.run_once(DealOrchestrator(first, runner=FailingRunner())))["failed"] == 1
     assert first.connection.execute("SELECT status FROM events").fetchone()[0] == "pending"
-    await run_pipeline(first, FakeRunner(DEMO_RESPONSES))
-    assert first.get_deal("lead-brand-001").stage == "proposal"
-    assert first.get_approval("approval:send_contract:lead-brand-001") is not None
+    assert first.get_deal("account-1") is None
+    assert (await worker.run_once(DealOrchestrator(first, runner=FakeRunner())))["processed"] == 1
+    assert first.get_approval("approval:send_first_touch:account-1") is not None
 
 
 def test_signed_event_requires_delivered_contract_evidence(stores):

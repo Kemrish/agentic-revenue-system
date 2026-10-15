@@ -6,14 +6,11 @@ from .adapters.claude_runner import ClaudeRunner
 from .adapters.db import SQLiteStore
 from .adapters.esign import DropboxSignAdapter
 from .adapters.fireflies import FirefliesAdapter
-from .adapters.fixtures.esign import FixtureESignAdapter
-from .adapters.fixtures.mail import FixtureMailAdapter
-from .adapters.fixtures.transcripts import FixtureTranscriptAdapter
+from .adapters.disabled import DisabledIntegration
 from .adapters.hubspot import HubSpotAdapter
 from .adapters.mail import MailAdapter
 from .adapters.openrouter_runner import OpenRouterRunner
-from .agents.execution import FakeRunner, ValidatingRunner
-from .agents.replay_responses import DEMO_RESPONSES
+from .agents.execution import DisabledRunner, ValidatingRunner
 from .settings import Settings
 
 
@@ -40,7 +37,7 @@ def agent_runner(settings: Settings):
                 raise ValueError("ANTHROPIC_API_KEY is required for the live Claude runner")
             return ValidatingRunner(ClaudeRunner(api_key=settings.anthropic_api_key)), "live · claude"
         raise ValueError("Set LLM_PROVIDER to openrouter, claude, or anthropic for a live model")
-    return FakeRunner(DEMO_RESPONSES), "replay · fixture responses"
+    return DisabledRunner(), "disabled"
 
 
 def build_container(settings: Settings | None = None) -> Container:
@@ -55,12 +52,12 @@ def build_container(settings: Settings | None = None) -> Container:
             selected.mail_api_key, selected.mail_from_address,
             allowed_recipients={v.strip() for v in selected.mail_allowed_recipients.split(",") if v.strip()},
             live_side_effects_enabled=selected.live_side_effects_enabled,
-        ) if live and selected.mail_mode == "live" else FixtureMailAdapter(),
-        transcripts=FirefliesAdapter(selected.fireflies_api_key) if live and selected.fireflies_mode == "live" else FixtureTranscriptAdapter(),
+        ) if live and selected.mail_mode == "live" else DisabledIntegration("Mail"),
+        transcripts=FirefliesAdapter(selected.fireflies_api_key) if live and selected.fireflies_mode == "live" else DisabledIntegration("Transcripts"),
         esign=DropboxSignAdapter(
             selected.esign_api_key, selected.esign_base_url, selected.esign_document_url,
             selected.esign_signer_email, selected.esign_signer_name,
             selected.live_side_effects_enabled, selected.esign_test_mode,
-        ) if live and selected.esign_mode == "live" else FixtureESignAdapter(),
+        ) if live and selected.esign_mode == "live" else DisabledIntegration("E-signature"),
         crm=HubSpotAdapter(selected.hubspot_access_token) if live and selected.hubspot_mode == "live" else None,
     )

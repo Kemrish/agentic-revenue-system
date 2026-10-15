@@ -25,7 +25,6 @@ DATABASE_URL=sqlite:///./revenue_system.db
 DASHBOARD_USERNAME=operator
 DASHBOARD_PASSWORD=<strong unique operator password>
 WEBHOOK_SECRET=<separate random shared secret for your ingress gateway>
-DEMO_ENABLED=false
 WORKER_POLL_SECONDS=5
 MAX_EVENT_ATTEMPTS=5
 MAX_DELIVERY_ATTEMPTS=5
@@ -36,9 +35,9 @@ WEBHOOK_MAX_BYTES=1048576
 
 The production dashboard refuses access when no password is configured. Operator APIs use HTTP Basic authentication and attribute approvals, rejections, lesson changes, recipient corrections, kill-switch changes, and manual queue retries to the authenticated operator. Use HTTPS at a trusted reverse proxy; Basic authentication is not transport encryption. Mutating browser requests with a different Origin are refused.
 
-Fixture seeding and workspace reset are refused when `APP_ENV=production`, even if `DEMO_ENABLED=true`. In development, `DEMO_ENABLED=false` disables these destructive/demo endpoints explicitly. Read-only explanations and agent lab tools remain available to authenticated operators.
+The runtime exposes operational endpoints only. It contains no fixture seeding, workspace reset, presentation pages, or interactive agent playground. Test doubles and canned responses belong exclusively to the automated test suite.
 
-For live LLM execution set `RUNTIME_MODE=live`, `CLAUDE_MODE=live`, `LLM_PROVIDER=openrouter` or `claude`/`anthropic`, and the appropriate API key. All entry points use the same runner selection. Live runners load the versioned agent prompt and pass the actual structured context; replay/test uses fixture responses and is labelled accordingly.
+For live LLM execution set `RUNTIME_MODE=live`, `CLAUDE_MODE=live`, `LLM_PROVIDER=openrouter` or `claude`/`anthropic`, and the appropriate API key. All entry points use the same runner selection. Live runners load the versioned agent prompt and pass the actual structured context. Non-live integration modes refuse execution instead of returning synthetic results.
 
 Email and e-signature still require their own live modes and `LIVE_SIDE_EFFECTS_ENABLED=true`. Mail must have an explicit allowlisted destination. Credentials being present does not prove provider acceptance or activate every integration automatically.
 
@@ -50,8 +49,8 @@ Import a JSON object or array with this shape:
 {
   "lead_id": "crm-contact-1001",
   "segment": "brand",
-  "company_name": "Your permitted demo account",
-  "contact_name": "Contact who agreed to the demonstration",
+  "company_name": "Your permitted account",
+  "contact_name": "Authorized contact",
   "email": "your-controlled-mailbox@example.com",
   "fit": 88,
   "intent": 70,
@@ -65,7 +64,7 @@ python -m revenue_system.cli worker --once
 python -m revenue_system.cli ui
 ```
 
-Import validates every record and segment before inserting any event. Reimporting the same lead ID returns a duplicate. The worker scores the lead, retrieves active lesson statements, drafts first-touch outreach, and routes it through policy. Incoming `policy_case` fields never select the production action type; those switches belong only to the fixture demonstration.
+Import validates every record and segment before inserting any event. Reimporting the same lead ID returns a duplicate. The worker scores the lead, retrieves active lesson statements, drafts first-touch outreach, and routes it through policy. Imported metadata never selects the action type or bypasses the autonomy rules.
 
 A second `lead.created` event for an existing lead does not rewind its stage, reset its consent flags, or send another first-touch draft. A future CRM-update event should have a separate, explicit update contract.
 
@@ -107,7 +106,7 @@ python -m revenue_system.cli queues retry outbox <outbox-id>
 
 Fix the cause first. Retry resets the exhausted budget, retains the original item/idempotency key, and records the operator action. It does not override consent, unsafe-content checks, or the mail allowlist.
 
-A successful delivery stores the provider reference and an `action.delivered` event atomically with the sent status. The worker advances mail to outreach and signature requests to contracting. A queued message alone does not prove delivery. The fixture presentation explicitly simulates subsequent replies/transcripts and must be labelled as a demonstration.
+A successful delivery stores the provider reference and an `action.delivered` event atomically with the sent status. The worker advances mail to outreach and signature requests to contracting. A queued message alone does not prove delivery; replies, transcripts, and signatures must enter through their verified event sources.
 
 External delivery is **at least once**, not a universal exactly-once guarantee. A provider can accept a request before the process records its response. Stable request keys help only where the provider supports them. Inspect provider logs before recovering an ambiguous signature request or an interrupted send.
 
@@ -135,6 +134,6 @@ Browser verification requires Playwright and Microsoft Edge (`pip install -e ".[
 - A gateway must implement and verify each native provider webhook contract. The existing HubSpot adapter is a narrow property-update boundary, not a full CRM synchronization service. Fireflies retrieval must be wired to a verified provider event and tested against the actual API.
 - Dropbox Sign currently references a configured document URL. Before real commercial use, ensure the exact approved document is the uploaded/signed artifact; the rendered text is not automatically published to that URL. Confirm plan capabilities and the completed-signature callback end to end.
 - Basic authentication supplies one operator identity, not SSO, role-based authorization, or a multi-user permission system. Terminate HTTPS, protect docs/metrics as required, configure process supervision, backups/restore drills, secrets storage/rotation, and error alerts before public exposure.
-- Lead research/feature extraction and CRM write-back remain explicit integration work. Fixed fixture scoring inputs are demonstration evidence, not real external research.
+- Lead research/feature extraction and CRM write-back remain explicit integration work. Imported scoring features must come from an identified evidence source; the application does not independently research external companies.
 
 These boundaries prevent the local hardening tests from being mistaken for a completed vendor-certified production deployment.

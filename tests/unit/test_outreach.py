@@ -2,7 +2,7 @@ import pytest
 from pathlib import Path
 
 from revenue_system.agents.base import AgentRequest, OutreachDraft
-from revenue_system.agents.execution import FakeRunner
+from tests.support.agents import FakeRunner
 from revenue_system.agents.outreach import OutreachAgent
 from revenue_system.domain.models import Deal
 from revenue_system.segments.schema import load_pack

@@ -1,190 +1,130 @@
 # Agentic Revenue System
 
-An AI-assisted revenue lifecycle system that turns leads, replies, and call transcripts into governed revenue actions. Agents propose typed outputs; deterministic Python code owns state, policy, validation, approvals, delivery, and auditability.
+An AI-assisted revenue operations application. Agents interpret leads, replies, and call transcripts and return typed proposals. Python code owns scoring, stage transitions, approvals, delivery, consent checks, and audit records.
 
 ```text
-lead → score → outreach proposal → human approval → email delivery
-                         ↓
-reply triage → call intelligence → lesson loop → validated IO
-                         ↓
-                 approved e-sign request
+Import / signed gateway → durable event → worker → agent / deterministic skill
+                                                ↓
+                              policy → approval or outbox → provider
+                                                ↓
+                           delivery / signature event → deal progression
 ```
 
-The demo supports `brand` and `publisher` segments through the same orchestration and agent code.
+The application supports brand and publisher workflows through YAML segment packs. The runtime contains operator tools and integration boundaries; automated test doubles live under `tests/support`.
 
-## Architecture
+## Requirements and installation
 
-This is a governed modular monolith:
-
-- deterministic orchestration owns deal state and valid transitions;
-- LLM agents return typed proposals rather than executing business actions;
-- policy routes actions to `AUTO`, `REQUIRE_APPROVAL`, or `DENY`;
-- approvals, outbox delivery, idempotency, kill switch, and audit records are durable;
-- integrations are behind adapters and support live, replay, record, and test modes;
-- YAML segment packs change messaging and qualification rules without code changes;
-- SQLite is the local operational store for the demo.
-
-Read the [architecture](docs/architecture.md), [decisions and trade-offs](docs/decisions.md), and [implementation plan](docs/implementation.md).
-
-## Quick start
-
-Requires Python 3.12+.
+Python 3.12 or later is required.
 
 ```powershell
 python -m pip install -e ".[dev]"
+Copy-Item .env.example .env
 python -m revenue_system.cli validate-packs
-python -m pytest -q
-python -m revenue_system.cli demo --mode replay
-python -m revenue_system.cli ui
 ```
 
-Replay mode is deterministic, requires no credentials, and is the recommended presentation fallback.
+If `.env` already exists, preserve its values and add only missing settings. Fill the credentials and operator password before starting live services. Secrets, databases, generated documents, and runtime artifacts must not be committed.
 
 ## Configuration
 
-Copy `.env.example` to `.env`. Never commit `.env`, API keys, generated databases, or sensitive provider responses.
+The full configuration reference is [`.env.example`](.env.example). Typical operator settings:
 
 ```env
+APP_ENV=production
+DATABASE_URL=sqlite:///./revenue_system.db
+DASHBOARD_USERNAME=operator
+DASHBOARD_PASSWORD=<strong unique password>
+WEBHOOK_SECRET=<separate random gateway secret>
 RUNTIME_MODE=live
+CLAUDE_MODE=live
 LLM_PROVIDER=openrouter
-OPENROUTER_API_KEY=...
-OPENROUTER_MODEL=anthropic/claude-haiku-5.5
-
+OPENROUTER_API_KEY=<secret>
 MAIL_MODE=live
-MAIL_API_KEY=...
-MAIL_FROM_ADDRESS=demo@your-verified-domain.com
-MAIL_ALLOWED_RECIPIENTS=your-own-test-address@example.com
-LIVE_SIDE_EFFECTS_ENABLED=true
-
-ESIGN_MODE=live
-ESIGN_API_KEY=...
-ESIGN_BASE_URL=https://api.hellosign.com
-ESIGN_DOCUMENT_URL=https://...
-ESIGN_SIGNER_EMAIL=your-own-test-address@example.com
-ESIGN_SIGNER_NAME=Your Name
-ESIGN_TEST_MODE=true
+MAIL_API_KEY=<secret>
+MAIL_FROM_ADDRESS=<verified sender>
+MAIL_ALLOWED_RECIPIENTS=<permitted destinations, comma separated>
+LIVE_SIDE_EFFECTS_ENABLED=false
 ```
 
-Live mail is refused unless the recipient is in `MAIL_ALLOWED_RECIPIENTS`. Email and e-signature also require explicit `LIVE_SIDE_EFFECTS_ENABLED=true`.
+`CLAUDE_MODE` is the existing runner-mode setting for both supported LLM providers. Set `LLM_PROVIDER=claude` or `anthropic` and `ANTHROPIC_API_KEY` to use the Claude Agent SDK instead of OpenRouter.
 
-### Dropbox Sign without a paid plan
+Integrations must be individually enabled. Non-live settings disable the corresponding operation and return an explicit error; they do not return synthetic delivery IDs or canned model results. `LIVE_SIDE_EFFECTS_ENABLED=true` explicitly permits configured live mail/e-signature calls. Mail remains restricted to `MAIL_ALLOWED_RECIPIENTS`.
 
-Keep `ESIGN_TEST_MODE=true`. This creates a Dropbox Sign test request and records its provider ID, but does not send a real signer notification. The included [fictional demo agreement](fixtures/demo-agreement.pdf) is for testing only.
+E-signature uses `ESIGN_DOCUMENT_URL`, signer settings, and its own API key. Keep `ESIGN_TEST_MODE=true` until the real commercial workflow and provider plan have been verified. Ensure the exact approved document is the artifact sent for signature; see the release limitations in the operations runbook.
+
+## Running the system
+
+Run each process from the project root, using the same database configuration:
 
 ```powershell
-python scripts/create_demo_pdf.py
+# Terminal 1: operator dashboard (http://127.0.0.1:8000)
+python -m revenue_system.cli ui
+
+# Terminal 2: signed event receiver (http://127.0.0.1:8001)
+python -m revenue_system.cli webhooks
+
+# Terminal 3: durable event processing
+python -m revenue_system.cli worker
 ```
 
-## Live production-style demo
+Add `--deliver` to the worker command to deliver permitted queued actions automatically. Human approval remains required where policy demands it. Without that option, an operator can review the delivery batch from Outbox or invoke `approvals deliver`.
 
-The workflow is approval-gated:
+Production dashboard access requires a configured password. Use HTTPS at a trusted reverse proxy for remote deployment. The current authentication supports one configured operator, not multi-user roles or SSO.
+
+## Lead intake and operation
+
+Real lead data enters through a JSON import or a signed, normalized webhook. A lead needs a stable `lead_id`, configured `segment`, `company_name`, and `contact_name`; supply `email` and fit/intent/engagement evidence for outreach and scoring.
 
 ```powershell
-python -m revenue_system.cli demo --mode live
+python -m revenue_system.cli ingest --file leads.json
+python -m revenue_system.cli worker --once
+```
+
+The worker persists a score and tier, retrieves active lesson statements, drafts outreach, and evaluates policy. The dashboard provides:
+
+- **Command center:** stable operational totals and actual policy decisions.
+- **Pipeline:** account details, scoring evidence, stages, and audit history.
+- **Approvals:** exact recipient/message or document, policy reason, and approve/reject decisions. Rejection requires a reason and proposes a lesson.
+- **Outbox:** reviewed destinations, explicit delivery, provider results, and failure recovery.
+- **Lessons:** review and promotion of proposed learning records.
+- **Audit trail:** operator attribution, stage transitions, denials, delivery evidence, and queue recovery.
+
+`AUTO` permits an action without human review. `REQUIRE_APPROVAL` pauses it for an operator. `DENY` blocks an unsafe or unsubscribed-contact action. `KILL_SWITCH` pauses routing and delivery. Agents cannot override these decisions.
+
+## Operations and recovery
+
+```powershell
+python -m revenue_system.cli health
 python -m revenue_system.cli approvals list
 python -m revenue_system.cli approvals approve <approval-id>
+python -m revenue_system.cli approvals reject <approval-id> --reason "Explain the rejection"
 python -m revenue_system.cli approvals deliver
-python -m revenue_system.cli audit <deal-id>
-```
-
-Agents never send approval-gated actions directly. `approvals deliver` sends only approved outbox items and marks them sent only after provider success.
-
-### Operator dashboard
-
-Start `python -m revenue_system.cli ui` and open `http://127.0.0.1:8000`.
-Overview, Pipeline, Approvals, Outbox, and Audit trail have dedicated views; their URL hashes restore the current page after reload.
-All five metric cards are permanent, including rejected approvals. Background refresh updates values without replacing an open review dialog or a draft rejection reason.
-
-In Approvals, choose **Review details** to inspect the company, contact, recipient, subject, complete message, score, and policy reason.
-**Approve and queue** persists that reviewed action. **Reject with reason** opens an in-app form; its explanation is stored with the decision, audit event, and proposed lesson.
-Decision history retains approved and rejected proposals. Decisions cannot be reversed by a stale browser request.
-
-In Outbox, review each pending action. If an older mail action has no recipient, open its details and explicitly save an allowlisted recipient.
-Delivery does not silently choose the first address from the environment. A recipient already attached to a queued action cannot be changed after review.
-Choose **Review delivery batch**, inspect the destinations, then **Deliver approved work**.
-Successful actions are marked sent and retained in delivery history; failures remain pending with visible per-action errors and audit records.
-The kill switch is checked immediately before each delivery, and contract actions use the e-signature adapter.
-
-The dashboard is a local operator application. Authentication, roles, multi-process delivery coordination, and remote deployment hardening remain separate deployment work.
-No new live provider calls are needed to verify the UI: the automated browser workflow uses an isolated database and test mail adapter.
-
-```powershell
-# Core and API regression tests
-python -m pytest -q -m "not browser" -p no:cacheprovider --basetemp .pytest-run-core
-
-# Browser workflow: requires installed Microsoft Edge
-python -m pip install -e ".[dev,browser]"
-python -m pytest -q -m browser -p no:cacheprovider --basetemp .pytest-run-browser
-```
-
-The fixture command `demo --mode replay` uses an in-memory store and does not populate the dashboard database.
-For a live fixture run and UI presentation, select the same database for both commands:
-
-```powershell
-$env:DATABASE_URL="sqlite:///./presentation_demo.db"
-python -m revenue_system.cli demo --mode live
-python -m revenue_system.cli ui
-```
-
-```powershell
-python -m revenue_system.cli approvals reject <approval-id>
+python -m revenue_system.cli queues failed
+python -m revenue_system.cli queues retry events <event-id>
+python -m revenue_system.cli queues retry outbox <outbox-id>
 python -m revenue_system.cli kill-switch --enabled
 python -m revenue_system.cli kill-switch --disabled
 ```
 
-Keep the mail allowlist limited to an address you control.
+Queue claims prevent concurrent consumers from processing the same active item. Expiring leases recover interrupted work; bounded retries use persistent backoff. Exhausted events and deliveries remain visible for explicit operator recovery. Delivery is at least once: reconcile ambiguous provider acceptance before retrying.
 
-## Runtime modes
-
-| Mode | Purpose |
-|---|---|
-| `test` | fake runners and isolated tests |
-| `replay` | deterministic recorded responses, no network |
-| `record` | capture live responses for later replay |
-| `live` | configured LLM and integration adapters |
-
-Modes can be selected independently per integration. Live OpenRouter plus replay integrations is a safe model-quality demo; live email requires an allowlist and explicit side-effect opt-in.
-
-## Safety guarantees
-
-- top-tier outreach and contracts require human approval;
-- prompt-injection content is untrusted and cannot invoke tools;
-- typed schemas and deterministic validators reject malformed agent output;
-- duplicate events and deliveries use idempotency keys;
-- provider failures remain pending and are audited;
-- live mail is recipient-allowlisted;
-- live e-sign is opt-in and Dropbox test mode is the no-paid-plan default;
-- audit records capture policy, approval, delivery, and failure events;
-- the kill switch can disable action processing.
-
-## Testing
+## Tests
 
 ```powershell
-python -m pytest -q
-python -m revenue_system.cli validate-packs
-python -m revenue_system.cli demo --mode replay
+python -m pytest -q -m "not browser" -p no:cacheprovider --basetemp .pytest-run-core
+python -m pip install -e ".[dev,browser]"
+python -m pytest -q -m browser -p no:cacheprovider --basetemp .pytest-run-browser
 ```
 
-The suite covers scoring, transitions, policy, approvals, outbox delivery, mail/e-sign safety, prompt injection, replay integrity, IO validation, segment packs, and both vertical-slice segments.
+Browser tests require installed Microsoft Edge. Tests use isolated databases and provider/model doubles under `tests/`; they never inherit live sending modes or the operator's configured database.
 
-## Production deployment notes
+## Deployment scope
 
-See the [production hardening and operations runbook](docs/production.md) for the completed durable webhook/worker path, authenticated operator access, queue leases, retry recovery, deployment commands, and remaining integration boundaries.
-
-The current repository is demo-ready and intentionally simple. Before operating at production scale:
-
-1. replace SQLite with PostgreSQL;
-2. run the outbox worker as a supervised process;
-3. use a secrets manager instead of local `.env` files;
-4. configure signed provider webhooks;
-5. add monitoring, alerting, rate limits, backups, and credential rotation;
-6. use real recipient/domain governance instead of demo allowlists;
-7. upgrade Dropbox Sign and disable test mode only when a paid plan and real legal workflow are approved.
+The [production runbook](docs/production.md) documents configuration, webhook payloads, retries, recovery, backups, and remaining release work. Native provider webhook verification/mapping, full CRM synchronization, exact-document signature delivery, HTTPS, supervision, and monitoring must be verified for the deployment. SQLite supports a bounded deployment sharing one local database; multi-host scale needs a database and queue migration.
 
 ## Documentation
 
 - [Architecture](docs/architecture.md)
-- [Decisions and trade-offs](docs/decisions.md)
-- [Implementation plan](docs/implementation.md)
-- [Demo script](docs/demo-script.md)
-- [Production operations and release limitations](docs/production.md)
+- [Architecture decisions and trade-offs](docs/decisions.md)
+- [Implementation](docs/implementation.md)
+- [System overview](docs/system-overview.md)
+- [Production operations](docs/production.md)
