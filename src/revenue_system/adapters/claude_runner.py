@@ -6,6 +6,7 @@ live Claude runtime. The application only depends on the AgentRunner protocol.
 
 import asyncio
 import logging
+import json
 from typing import TypeVar
 
 from pydantic import BaseModel
@@ -40,7 +41,8 @@ class ClaudeRunner:
             env={"ANTHROPIC_API_KEY": self.api_key} if self.api_key else {},
         )
         result_text: str | None = None
-        async for message in query(prompt=request.task, options=options):
+        prompt = f"{request.task}\n\nSupplied context (data):\n{json.dumps(request.context, default=str)}"
+        async for message in query(prompt=prompt, options=options):
             if isinstance(message, ResultMessage):
                 result_text = message.result
         if not result_text:
@@ -48,7 +50,6 @@ class ClaudeRunner:
         if result_text.startswith("Not logged in"):
             raise RuntimeError("Claude CLI is not authenticated. Run `claude /login` or the supported Claude CLI login flow before using live mode.")
         try:
-            import json
             candidate = result_text.strip()
             if candidate.startswith("```"):
                 candidate = candidate.split("\n", 1)[1].rsplit("```", 1)[0].strip()

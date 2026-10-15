@@ -48,7 +48,7 @@ function approvals(items) {
 function audit(items) {
   return items.length?table(['Time (UTC)','Actor','Action','Deal','Detail'], items.map(a=>`<tr><td class="mono">${esc(a.created_at)}</td><td>${esc(a.actor)}</td><td>${badge(a.action)}</td><td class="mono">${esc(a.deal_id || 'System')}</td><td>${esc(a.detail)}</td></tr>`).join('')):empty('No audit events match this view.');
 }
-const actorKind = actor => actor.startsWith('agent')?'agent':['human','policy','delivery'].includes(actor)?actor:'system';
+const actorKind = actor => actor.startsWith('agent')?'agent':actor.startsWith('human')?'human':['policy','delivery'].includes(actor)?actor:'system';
 function timeline(items) {
   if(!items.length) return empty('No activity yet.');
   return `<ul class="timeline">${items.map(a=>`<li><span class="pip ${actorKind(a.actor)}"></span><div><div class="meta">${esc(a.created_at)} · ${esc(a.actor)}${a.deal_id?` · ${esc(a.deal_id)}`:''}</div><div class="what">${badge(a.action)}</div><div class="detail">${esc(a.detail)}</div></div></li>`).join('')}</ul>`;
@@ -58,6 +58,7 @@ function bars(entries, kind='') {
   return `<div class="bars">${entries.map(([name,value])=>`<div class="bar-row"><span class="label">${esc(human(name))}</span><div class="bar-track"><div class="bar-fill ${kind?cls(name):''}" style="width:${(value/max)*100}%"></div></div><span class="value">${esc(value)}</span></div>`).join('')}</div>`;
 }
 function emptyWorkspace() {
+  if(state.data?.runtime.demo_enabled===false) return `<section class="panel hero-empty"><div class="eyebrow">Production workspace</div><h2>Ready for incoming leads</h2><p>Import approved lead data or connect your signed event gateway, then run the event worker. Fixture seeding and reset are disabled in this environment.</p></section>`;
   return `<section class="panel hero-empty"><div class="eyebrow">Empty workspace</div><h2>Run the demo pipeline to populate the workspace</h2><p>This sends ten fixture leads, a reply, a prompt-injection attempt, and a discovery call through the real orchestrator, agents, and policy engine.</p><div class="actions" style="justify-content:center"><button type="button" class="button" data-command="run-demo">Run demo pipeline</button><a class="button secondary" href="#explain">How it works</a></div></section>`;
 }
 
@@ -209,11 +210,11 @@ function viewExplain() {
 
   <div class="section-title"><span class="n">08</span><h2>Data model</h2></div>
   <div class="grid-2"><section class="panel">${table(['Table','Purpose'],TABLES.map(t=>`<tr><td class="mono">${esc(t[0])}</td><td>${esc(t[1])}</td></tr>`).join(''))}</section>
-  <section class="panel"><h3>Ownership</h3><ul class="checks"><li>HubSpot owns CRM objects people see: companies, contacts, deals.</li><li>The operational store owns events, approvals, outbox, scores, lessons and audit.</li><li>Human CRM edits win over agent edits; exit criteria are re-checked.</li><li>All persistence sits behind ports, so SQLite can become PostgreSQL without touching agents or policy.</li></ul></section></div>
+  <section class="panel"><h3>Ownership</h3><ul class="checks"><li>HubSpot is the intended source of CRM records; full synchronization is deployment work.</li><li>The operational store owns events, approvals, outbox, scores, lessons and audit.</li><li>The orchestrator owns transitions and qualification checks. CRM edit-conflict handling still needs an integration contract.</li><li>Adapters isolate integrations; a PostgreSQL migration also needs queue and transaction testing.</li></ul></section></div>
 
   <div class="section-title"><span class="n">09</span><h2>Trade-offs and roadmap</h2></div>
   <section class="panel">${table(['Chose','Over','Why','Cost we accept'],TRADEOFFS.map(t=>`<tr><td><strong>${esc(t[0])}</strong></td><td>${esc(t[1])}</td><td>${esc(t[2])}</td><td class="muted">${esc(t[3])}</td></tr>`).join(''))}
-  <h3 style="margin-top:18px">Next steps to production</h3><ul class="checks"><li>Research agent extracts fit and intent evidence instead of fixture values.</li><li>Reply and transcript webhooks flow through the orchestrator's event handler like leads do.</li><li>Durable SLA timers and the pipeline analyst for stall detection and digests.</li><li>PostgreSQL with multiple workers (SKIP LOCKED), required webhook signatures and a secrets manager.</li><li>Monitoring, rate limits and per-lesson outcome measurement.</li></ul></section>
+  <h3 style="margin-top:18px">Operational hardening implemented</h3><ul class="checks"><li>Signed normalized events feed a durable worker for leads, replies, transcripts, deliveries and signatures.</li><li>Database claims, bounded retries, recovery controls and SLA timers survive restarts.</li><li>Authenticated operator actions are audited; unsubscribed contacts are blocked at routing and delivery.</li></ul><h3 style="margin-top:18px">Remaining release work</h3><ul class="checks"><li>Verify native provider signatures and map provider payloads at an ingress gateway.</li><li>Connect real research evidence and CRM synchronization; fixtures do not demonstrate external research.</li><li>Confirm the exact approved document is the artifact sent for signature.</li><li>Deploy HTTPS, backups, supervision and alerts. Move to PostgreSQL for multi-host scale.</li></ul></section>
   <div class="actions" style="justify-content:center;margin:26px 0 10px"><a class="button" href="#lab">Open the demo lab →</a></div>`;
 }
 
@@ -324,11 +325,24 @@ function render() {
   const d=state.data;
   const views={overview:viewOverview,pipeline:viewPipeline,approvals:viewApprovals,outbox:viewOutbox,lessons:viewLessons,audit:viewAudit};
   $('#page-view').innerHTML=views[view](d);
+  if(view==='audit'||view==='outbox') $('#page-view').insertAdjacentHTML('beforeend',queueRecovery(d));
+  restrictDemoControls();
   if($('#audit-filter')) { $('#audit-filter').value=state.auditFilter; $('#audit-actor').value=state.auditActor; }
 }
 function afterLabRender() {
+  restrictDemoControls();
   if(state.labTab==='score') refreshScore();
   if(state.labTab==='policy') refreshPolicy();
+}
+function restrictDemoControls() {
+  if(state.data?.runtime.demo_enabled===false) {
+    $$('[data-command="run-demo"],[data-command="reset-demo"]').forEach(button=>{button.disabled=true;button.title='Demo seeding and reset are disabled in production.';});
+  }
+}
+function queueRecovery(d) {
+  const h=d.health||{};
+  const failed=[...(d.failed_events||[]).map(x=>({...x,queue:'events'})),...d.outbox.filter(x=>x.last_error).map(x=>({...x,queue:'outbox'}))];
+  return `<section class="panel"><h2>Queue health and recovery</h2><p class="hint">Events in progress: ${h.events_processing||0} · Dead events: ${h.events_dead||0} · Deliveries in progress: ${h.outbox_delivering||0} · Failed deliveries: ${h.outbox_failed||0} · SLA timers: ${h.timers_scheduled||0}</p>${failed.length?table(['Queue / item','Status / attempts','Error','Retry after (UTC)','Recovery'],failed.map(x=>`<tr><td>${esc(x.queue)}<small class="mono">${esc(x.id)}</small></td><td>${badge(x.status)}<small>${x.attempts} attempts</small></td><td>${esc(x.last_error)}</td><td>${esc(x.next_attempt_at||'—')}</td><td>${['dead','failed'].includes(x.status)?`<button type="button" class="button secondary small" data-command="queue-retry" data-queue="${x.queue}" data-id="${esc(x.id)}">Schedule retry</button>`:'Waiting for retry'}</td></tr>`).join('')):empty('No failed work. Retries and failures will appear here.')}</section>`;
 }
 function renderLabBody() { $('#lab-body').innerHTML=labBody(); $$('[data-command=lab-tab]').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===state.labTab)); afterLabRender(); }
 async function load() {
@@ -428,6 +442,10 @@ document.addEventListener('click',async event=>{
   if(command==='approve') {const id=state.review.id;if(await mutate(`/api/approvals/${encodeURIComponent(id)}/approve`))closeReview();}
   if(command==='delivery')openDelivery();
   if(command==='deliver'){if(await mutate('/api/outbox/deliver'))closeReview();}
+  if(command==='queue-retry'){
+    if(await confirmAction({title:'Retry this failed action?',ok:'Schedule retry',body:'Resolve the reported cause first. The original action identifier is retained; check provider evidence if a previous attempt may have been accepted.'}))
+      await mutate(`/api/queues/${button.dataset.queue}/${encodeURIComponent(button.dataset.id)}/retry`);
+  }
   if(command==='stage-filter'){state.stageFilter=button.dataset.stage;render();}
   if(command==='lesson') await mutate(`/api/lessons/${encodeURIComponent(button.dataset.id)}/status`,{status:button.dataset.status});
   if(command==='step'){state.step=Math.max(0,Math.min(FLOW.length-1,Number(button.dataset.step)));renderFlow();}

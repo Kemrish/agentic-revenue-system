@@ -6,22 +6,21 @@ validation, routing). Nothing here re-implements a business rule.
 
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 
 from .adapters.db import SQLiteStore
 from .agents.call_intelligence import CallIntelligenceAgent
 from .agents.deal_desk import IODraft
-from .agents.execution import FakeRunner
 from .agents.reply_triage import ReplyTriageAgent
 from .agents.tools import TOOL_SCOPES
-from .container import build_container
+from .container import agent_runner
 from .domain.models import Action, ActionType, Deal, Score, Tier
 from .domain.stages import ALLOWED_TRANSITIONS, STAGES
 from .governance.guardrails import wrap_untrusted_content
 from .governance.policy import PolicyEngine
 from .orchestration.actions import route_action
-from .orchestration.demo_flow import DEMO_RESPONSES, run_pipeline
+from .orchestration.demo_flow import run_pipeline
 from .segments.registry import PackRegistry
 from .settings import Settings
 from .skills.io_validation import validate_io
@@ -108,13 +107,7 @@ def pack_or_404(segment: str):
         raise HTTPException(404, f"Unknown segment pack: {segment}") from exc
 
 
-def lab_runner(settings: Settings):
-    """Live model when configured; otherwise the recorded demo responses."""
-    if settings.runtime_mode == "live" and settings.claude_mode == "live":
-        container = build_container(settings)
-        container.store.connection.close()
-        return container.runner, f"live · {settings.llm_provider}"
-    return FakeRunner(DEMO_RESPONSES), "replay · recorded responses"
+lab_runner = agent_runner
 
 
 def fixture(path: str) -> str:
@@ -222,7 +215,13 @@ def lab_io_submit(request: IORequest):
         store.connection.close()
 
 
-@router.post("/demo/run")
+def require_demo():
+    settings = Settings()
+    if not settings.demo_enabled or settings.app_env.lower() == "production":
+        raise HTTPException(403, "Fixture seeding and workspace reset are disabled in production.")
+
+
+@router.post("/demo/run", dependencies=[Depends(require_demo)])
 async def demo_run():
     settings = Settings()
     runner, label = lab_runner(settings)
@@ -237,14 +236,14 @@ async def demo_run():
     return {"runner": label, "lines": lines, "message": f"Pipeline run complete ({label})."}
 
 
-@router.post("/demo/reset")
+@router.post("/demo/reset", dependencies=[Depends(require_demo)])
 def demo_reset(request: ResetRequest):
     if request.confirm != "RESET":
         raise HTTPException(400, "Type RESET to confirm.")
     store = SQLiteStore(Settings().database_url)
     try:
         with store.connection:
-            for table in ("deals", "events", "approvals", "outbox", "audit_log", "lessons", "system_flags"):
+            for table in ("deals", "events", "approvals", "outbox", "audit_log", "lessons", "system_flags", "timers"):
                 store.connection.execute(f"DELETE FROM {table}")
     finally:
         store.connection.close()

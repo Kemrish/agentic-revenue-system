@@ -13,17 +13,22 @@ class ApprovalService:
         self.store.add_approval(approval_id, action)
         self.store.audit("system", "approval_requested", action.action_type.value, action.deal_id)
 
-    def decide(self, approval_id: str, approved: bool, rejection_reason: str | None = None) -> DomainEvent:
+    def decide(self, approval_id: str, approved: bool, rejection_reason: str | None = None, actor: str = "human") -> DomainEvent:
         rejection_reason = (rejection_reason or "").strip()
         if not approved and not rejection_reason:
             raise ValueError("A rejection reason is required")
         status = "approved" if approved else "rejected"
         # Decision, evidence, and queued action/lesson commit together. A second
         # operator cannot reverse a decision or queue the same action twice.
-        with self.store.connection:
+        with self.store.transaction():
             row = self.store.get_approval(approval_id)
             if row is None:
                 raise ValueError("Approval not found")
+            if approved:
+                payload = json.loads(row["payload"])
+                deal = self.store.get_deal(row["deal_id"])
+                if payload.get("unsafe") or payload.get("injection_detected") or (deal and "do_not_contact" in deal.flags):
+                    raise ValueError("Unsafe or unsubscribed contact actions cannot be approved")
             updated = self.store.connection.execute(
                 "UPDATE approvals SET status=?, rejection_reason=? WHERE id=? AND status='pending'",
                 (status, rejection_reason if not approved else None, approval_id),
@@ -33,7 +38,7 @@ class ApprovalService:
             detail = approval_id if approved else f"{approval_id}: {rejection_reason}"
             self.store.connection.execute(
                 "INSERT INTO audit_log(deal_id,actor,action,detail,created_at) VALUES(?,?,?,?,datetime('now'))",
-                (row["deal_id"], "human", f"approval_{status}", detail),
+                (row["deal_id"], actor, f"approval_{status}", detail),
             )
             if approved:
                 self.store.connection.execute(

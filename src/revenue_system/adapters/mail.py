@@ -1,4 +1,5 @@
 import json
+import asyncio
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -12,6 +13,9 @@ class MailAdapter:
         self.live_side_effects_enabled = live_side_effects_enabled
 
     async def send(self, recipient: str, subject: str, body: str, idempotency_key: str) -> str:
+        return await asyncio.to_thread(self._send, recipient, subject, body, idempotency_key)
+
+    def _send(self, recipient: str, subject: str, body: str, idempotency_key: str) -> str:
         if not self.live_side_effects_enabled:
             raise PermissionError("Live mail is disabled; set LIVE_SIDE_EFFECTS_ENABLED=true explicitly")
         if recipient not in self.allowed_recipients:

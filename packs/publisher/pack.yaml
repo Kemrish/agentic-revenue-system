@@ -25,4 +25,10 @@ autonomy:
     - first_touch_tier_a
     - pricing
     - contract_send
-
+sla_days:
+  outreach: 7
+  engaged: 10
+  meeting: 5
+  qualified: 7
+  proposal: 10
+  contracting: 14

@@ -1,4 +1,5 @@
 import json
+import asyncio
 import base64
 from urllib.error import HTTPError
 from urllib.parse import urlencode
@@ -16,6 +17,9 @@ class DropboxSignAdapter:
         self.test_mode = test_mode
 
     async def send_for_signature(self, document: str, idempotency_key: str) -> str:
+        return await asyncio.to_thread(self._send_for_signature, document, idempotency_key)
+
+    def _send_for_signature(self, document: str, idempotency_key: str) -> str:
         if not self.live_side_effects_enabled:
             raise PermissionError("Live e-sign is disabled; set LIVE_SIDE_EFFECTS_ENABLED=true explicitly")
         if not all((self.document_url, self.signer_email, self.signer_name)):

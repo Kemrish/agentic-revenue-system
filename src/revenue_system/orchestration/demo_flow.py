@@ -2,36 +2,24 @@ import json
 from pathlib import Path
 
 from revenue_system.adapters.db import SQLiteStore
-from revenue_system.agents.call_intelligence import CallIntelligenceAgent
-from revenue_system.agents.deal_desk import DealDeskAgent, repair_from_supplied_data
 from revenue_system.agents.execution import FakeRunner
 from revenue_system.agents.outreach import OutreachAgent
-from revenue_system.agents.reply_triage import ReplyTriageAgent
+from revenue_system.agents.replay_responses import DEMO_RESPONSES
 from revenue_system.domain.models import Action, ActionType
 from revenue_system.orchestration.actions import route_action
 from revenue_system.orchestration.events import DomainEvent
 from revenue_system.orchestration.orchestrator import DealOrchestrator
 from revenue_system.segments.registry import PackRegistry
-from revenue_system.skills.io_validation import validate_io
-from revenue_system.skills.templating import TemplateRenderer
+from revenue_system.orchestration.worker import EventWorker
 from revenue_system.container import build_container
 from revenue_system.settings import Settings
 
-# Recorded agent responses used when no live model is configured.
-DEMO_RESPONSES = {
-    "reply_triage": {"label": "interested", "confidence": 0.96, "summary": "Requested a meeting"},
-    "call_intelligence": {
-        "qualification_fields": {"budget": "250000", "timeline": "90 days", "decision_maker": "VP Marketing"},
-        "objections": [], "next_steps": ["prepare IO"],
-        "lesson_candidate": "Measurement proof improves campaign conversations.",
-    },
-    "deal_desk": {"legal_entity": "Example Foods", "budget": 250000, "start_date": "2026-11-01",
-                  "end_date": "2027-01-31", "line_items": [{"name": "Activate", "amount": 250000}]},
-}
 DEMO_LESSON = ("lesson-measurement", "global",
                "Lead with measurement proof: buyers ask how local campaign impact is proven.",
                ["fixtures/transcripts/brand-discovery.txt"])
 DEMO_DEAL = "lead-brand-001"
+DEMO_TERMS = {"legal_entity": "Example Foods", "budget": "250000", "start_date": "2026-11-01", "end_date": "2027-01-31",
+              "line_items": [{"name": "Activate", "amount": 250000}]}
 
 
 async def run_demo(mode: str = "replay", root: Path = Path(".")) -> list[str]:
@@ -58,9 +46,15 @@ async def run_demo(mode: str = "replay", root: Path = Path(".")) -> list[str]:
 
 
 async def run_pipeline(store: SQLiteStore, runner, root: Path = Path("."), recipient: str | None = None) -> list[str]:
-    """Drive every fixture lead, reply, and transcript through the governed lifecycle."""
+    """Drive every fixture lead, reply, and transcript through the governed lifecycle.
+
+    Leads are scored on ingest so the demo can seed outreach scenarios; replies
+    and transcripts are recorded as events and processed by the same worker
+    that serves the webhooks.
+    """
     packs = PackRegistry(root / "packs")
-    orchestrator = DealOrchestrator(store, root / "packs")
+    orchestrator = DealOrchestrator(store, root / "packs", runner)
+    worker = EventWorker(store)
     leads = json.loads((root / "fixtures/leads.json").read_text(encoding="utf-8"))
     output: list[str] = []
     lesson_id, lesson_segment, statement, evidence = DEMO_LESSON
@@ -74,67 +68,54 @@ async def run_pipeline(store: SQLiteStore, runner, root: Path = Path("."), recip
             "intent": 70,
             "engagement": 0,
         })
-        store.add_event_once(event.event_id, event.event_type, event.payload)
-        deal = orchestrator.handle(event)
-        store.mark_event_processed(event.event_id)
-        assert deal is not None and deal.score is not None
-        output.append(f"[{deal.segment}] score={deal.score.total:.0f} tier={deal.score.tier.value}")
+        worker.ingest(event)
+        if not store.claim("events", event.event_id, worker.owner, worker.lease_seconds, worker.max_attempts):
+            output.append(f"[{lead['segment']}] {lead['id']} duplicate event ignored")
+            continue
+        try:
+            # Prepare before writing; interrupted model calls leave a retryable event.
+            deal = store.get_deal(lead["id"]) or orchestrator._build_lead(event)
+            pack = packs.get(deal.segment)
+            lesson_rows = [dict(row) for row in store.active_lessons(deal.segment)]
+            lessons = [row["id"] for row in lesson_rows]
+            draft = await OutreachAgent(runner).draft(deal, pack, lessons,
+                [{"id": row["id"], "statement": row["statement"], "evidence": row["evidence"]} for row in lesson_rows])
+            case = lead.get("policy_case", "approval")
+            action_type = ActionType.SEND_FOLLOW_UP if case == "auto" else ActionType.SEND_FIRST_TOUCH
+            payload = {"subject": draft.subject, "body": draft.body, "lessons_used": draft.lessons_used,
+                       **({"recipient": lead.get("email") or recipient} if lead.get("email") or recipient else {})}
+            if case == "deny":
+                payload["injection_detected"] = True
+            with store.transaction():
+                store.assert_claim("events", event.event_id, worker.owner)
+                store.save_deal(deal)
+                store.audit("orchestrator", "lead_scored", deal.score.reason, deal.id)
+                store.audit("agent:outreach", "draft_proposed", f"subject={draft.subject!r} lessons_used={draft.lessons_used}", deal.id)
+                decision = route_action(store, Action(action_type, deal.id, payload), deal, pack)
+                if decision == "AUTO":
+                    orchestrator.try_advance(deal.id, "outreach", "demo outreach queued in outbox")
+                worker.mark_processed(event.event_id)
+            output.append(f"[{deal.segment}] score={deal.score.total:.0f} tier={deal.score.tier.value}")
+            output.append(f"[{deal.segment}] outreach={decision} lessons={draft.lessons_used}")
+        except Exception as exc:
+            store.record_event_failure(event.event_id, str(exc), worker.max_attempts)
+            raise
 
-        pack = packs.get(deal.segment)
-        lessons = [row["id"] for row in store.active_lessons(deal.segment)]
-        draft = await OutreachAgent(runner).draft(deal, pack, lessons)
-        store.audit("agent:outreach", "draft_proposed", f"subject={draft.subject!r} lessons_used={draft.lessons_used}", deal.id)
-        case = lead.get("policy_case", "approval")
-        action_type = ActionType.SEND_FOLLOW_UP if case == "auto" else ActionType.SEND_FIRST_TOUCH
-        payload = {"subject": draft.subject, "body": draft.body, "lessons_used": draft.lessons_used,
-                   **({"recipient": lead.get("email") or recipient} if lead.get("email") or recipient else {})}
-        if case == "deny":
-            payload["injection_detected"] = True
-        decision = route_action(store, Action(action_type, deal.id, payload), deal, pack)
-        if decision == "AUTO":
-            orchestrator.advance(deal.id, "outreach", "outreach queued in outbox")
-        output.append(f"[{deal.segment}] outreach={decision} lessons={draft.lessons_used}")
+    fixture = lambda path: (root / "fixtures" / path).read_text(encoding="utf-8")
+    worker.ingest(DomainEvent("reply.received", "fixture:reply:interested", {"deal_id": DEMO_DEAL, "text": fixture("replies/interested.txt")}))
+    worker.ingest(DomainEvent("reply.received", "fixture:reply:injection", {"deal_id": "lead-deny-001", "text": fixture("replies/prompt_injection.txt")}))
+    worker.ingest(DomainEvent("transcript.ready", "fixture:transcript:brand-discovery", {
+        "deal_id": DEMO_DEAL, "transcript_id": "brand-discovery", "transcript": fixture("transcripts/brand-discovery.txt"), "deal_terms": DEMO_TERMS}))
+    await worker.run_once(orchestrator, {"reply.received", "transcript.ready"})
 
-    triage = ReplyTriageAgent(runner)
-    reply = await triage.classify((root / "fixtures/replies/interested.txt").read_text(encoding="utf-8"))
-    store.audit("agent:reply_triage", "reply_classified", f"label={reply.label} confidence={reply.confidence:.2f}: {reply.summary}", DEMO_DEAL)
-    if reply.label == "interested":
-        orchestrator.advance(DEMO_DEAL, "engaged", "interested reply received", {"last_reply": reply.label})
-    output.append(f"[reply] label={reply.label}")
-
-    injection = await triage.classify((root / "fixtures/replies/prompt_injection.txt").read_text(encoding="utf-8"))
-    store.audit("agent:reply_triage", "reply_flagged" if injection.injection_detected else "reply_classified",
-                f"label={injection.label} injection_detected={injection.injection_detected}", "lead-deny-001")
-    output.append(f"[safety] label={injection.label} flagged={injection.injection_detected}")
-
-    brand = packs.get("brand")
-    digest = await CallIntelligenceAgent(runner).digest((root / "fixtures/transcripts/brand-discovery.txt").read_text(encoding="utf-8"), brand.qualification_fields)
-    orchestrator.advance(DEMO_DEAL, "meeting", "discovery call transcript received")
-    store.audit("agent:call_intelligence", "call_digested", f"fields={digest.qualification_fields} next_steps={digest.next_steps}", DEMO_DEAL)
-    missing = [name for name in brand.qualification_fields if not digest.qualification_fields.get(name)]
-    if missing:
-        store.audit("orchestrator", "exit_criteria_unmet", f"meeting -> qualified blocked; missing {missing}", DEMO_DEAL)
-    else:
-        orchestrator.advance(DEMO_DEAL, "qualified", "all pack qualification fields captured", digest.qualification_fields)
-    if digest.lesson_candidate:
-        store.save_lesson("lesson-call-brand-discovery", "brand", digest.lesson_candidate, ["fixtures/transcripts/brand-discovery.txt"])
-    output.append(f"[call] fields={len(digest.qualification_fields)} lesson_created={bool(digest.lesson_candidate)}")
-
-    io_inputs = digest.qualification_fields | {
-        "legal_entity": "Example Foods",
-        "budget": "250000",
-        "start_date": "2026-11-01",
-        "end_date": "2027-01-31",
-        "line_items": [{"name": "Activate", "amount": 250000}],
-    }
-    io_draft = await DealDeskAgent(runner).draft(io_inputs, brand)
-    io_draft = repair_from_supplied_data(io_draft, io_inputs)
-    errors = validate_io(io_draft.as_io_data())
-    rendered = TemplateRenderer(root / "packs").render("brand/templates/io.md.j2", {**io_draft.model_dump(), "line_items": io_draft.line_items})
-    store.audit("agent:deal_desk", "io_drafted", f"valid={not errors} errors={errors or 'none'}", DEMO_DEAL)
     deal = store.get_deal(DEMO_DEAL)
-    if not errors and deal is not None and deal.stage == "qualified":
-        deal = orchestrator.advance(DEMO_DEAL, "proposal", "IO generated and validated")
-        route_action(store, Action(ActionType.SEND_CONTRACT, DEMO_DEAL, {"document": rendered, **io_draft.model_dump()}), deal, brand)
-    output.append(f"[io] valid={not errors} rendered={len(rendered) > 0} errors={', '.join(errors) if errors else 'none'}")
+    flagged = store.get_deal("lead-deny-001")
+    output.append(f"[reply] label={deal.fields.get('last_reply')}")
+    output.append(f"[safety] label={'suspicious' if 'suspicious_reply' in flagged.flags else 'clear'} flagged={'suspicious_reply' in flagged.flags}")
+    captured = [name for name in packs.get("brand").qualification_fields if deal.fields.get(name)]
+    lesson = store.connection.execute("SELECT 1 FROM lessons WHERE id='lesson-call-brand-discovery'").fetchone()
+    output.append(f"[call] fields={len(captured)} lesson_created={bool(lesson)}")
+    contract = store.get_approval(f"approval:send_contract:{DEMO_DEAL}")
+    errors = store.connection.execute("SELECT detail FROM audit_log WHERE deal_id=? AND action='io_invalid' ORDER BY id DESC", (DEMO_DEAL,)).fetchone()
+    output.append(f"[io] valid={contract is not None} rendered={bool(contract and json.loads(contract['payload']).get('document'))} errors={errors['detail'] if errors else 'none'}")
     return output

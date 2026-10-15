@@ -8,7 +8,8 @@ class OutreachAgent:
     def __init__(self, runner: AgentRunner) -> None:
         self.runner = runner
 
-    async def draft(self, deal: Deal, pack: SegmentPack, lessons: list[str] | None = None) -> OutreachDraft:
+    async def draft(self, deal: Deal, pack: SegmentPack, lessons: list[str] | None = None,
+                    lesson_context: list[dict] | None = None) -> OutreachDraft:
         lessons = lessons or []
         products = ", ".join(pack.messaging.get("products", []))
         request = AgentRequest(
@@ -20,6 +21,7 @@ class OutreachAgent:
                 "segment": deal.segment,
                 "value_proposition": f"Cool AI can help with {products}.",
                 "lessons_used": lessons,
+                "lessons": lesson_context or [],
             },
         )
         return await self.runner.run(request, OutreachDraft)

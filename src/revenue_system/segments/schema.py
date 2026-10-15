@@ -32,6 +32,18 @@ class SegmentPack(BaseModel):
     messaging: dict[str, Any] = Field(default_factory=dict)
     templates: TemplateConfig
     autonomy: dict[str, list[str]] = Field(default_factory=dict)
+    sla_days: dict[str, int] = Field(default_factory=dict)
+
+    @field_validator("sla_days")
+    @classmethod
+    def sla_stages_exist(cls, value: dict[str, int]) -> dict[str, int]:
+        from revenue_system.domain.stages import STAGES
+        unknown = set(value) - set(STAGES)
+        if unknown:
+            raise ValueError(f"sla_days names unknown stages: {sorted(unknown)}")
+        if any(days <= 0 for days in value.values()):
+            raise ValueError("sla_days must be positive")
+        return value
 
 
 def load_pack(path: Path) -> SegmentPack:

@@ -2,6 +2,7 @@
 
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 RuntimeMode = Literal["live", "record", "replay", "test"]
@@ -33,6 +34,15 @@ class Settings(BaseSettings):
     esign_signer_name: str = ""
     esign_test_mode: bool = True
     webhook_secret: str = ""
+    dashboard_username: str = "operator"
+    dashboard_password: str = ""
+    worker_poll_seconds: float = Field(default=5.0, gt=0, le=3600)
+    max_event_attempts: int = Field(default=5, ge=1, le=100)
+    max_delivery_attempts: int = Field(default=5, ge=1, le=100)
+    retry_base_seconds: float = Field(default=5, ge=0, le=3600)
+    queue_lease_seconds: int = Field(default=300, ge=60, le=3600)
+    webhook_max_bytes: int = Field(default=1048576, ge=1024, le=10485760)
+    demo_enabled: bool = True
     live_side_effects_enabled: bool = False
     mail_allowed_recipients: str = ""
 

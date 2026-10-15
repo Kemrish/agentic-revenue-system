@@ -245,3 +245,53 @@ def test_kill_switch_and_lesson_curation_are_audited(presenter):
     assert store.active_lessons("brand")[0]["id"] == lesson_id
     actions = {row["action"] for row in store.connection.execute("SELECT action FROM audit_log")}
     assert {"KILL_SWITCH", "lesson_proposed", "lesson_active"} <= actions
+
+
+def test_dashboard_sign_in_and_operator_attribution(operator_workspace, monkeypatch):
+    client, store, _ = operator_workspace
+    settings = dashboard.Settings().model_copy(update={"dashboard_password": "s3cret", "dashboard_username": "amina"})
+    monkeypatch.setattr(dashboard, "Settings", lambda: settings)
+    assert client.get("/api/overview").status_code == 401
+    assert client.get("/api/overview", auth=("amina", "wrong")).status_code == 401
+    assert client.get("/healthz").json()["status"] == "ok"
+    assert client.post("/api/approvals/a1/approve", auth=("amina", "s3cret")).status_code == 200
+    actor = store.connection.execute("SELECT actor FROM audit_log WHERE action='approval_approved'").fetchone()["actor"]
+    assert actor == "human:amina"
+
+
+def test_production_dashboard_fails_closed_without_password(operator_workspace, monkeypatch):
+    client, _, _ = operator_workspace
+    settings = dashboard.Settings().model_copy(update={"app_env":"production", "dashboard_password":""})
+    monkeypatch.setattr(dashboard, "Settings", lambda: settings)
+    assert client.get("/api/overview").status_code == 503
+    assert client.get("/healthz").status_code == 200
+
+
+def test_cross_origin_mutations_are_refused(operator_workspace):
+    client, store, _ = operator_workspace
+    response = client.post("/api/approvals/a1/approve", headers={"Origin":"https://untrusted.example"})
+    assert response.status_code == 403
+    assert store.get_approval("a1")["status"] == "pending"
+    assert client.post("/api/approvals/a1/approve", headers={"Origin":"http://testserver"}).status_code == 200
+
+
+def test_production_demo_reset_is_unavailable(presenter, monkeypatch):
+    from revenue_system import demo_api
+
+    client, store, _ = presenter
+    settings = demo_api.Settings().model_copy(update={"app_env":"production"})
+    monkeypatch.setattr(demo_api, "Settings", lambda: settings)
+    assert client.post("/api/demo/reset", json={"confirm":"RESET"}).status_code == 403
+    assert client.post("/api/demo/run").status_code == 403
+    assert store.get_approval("a1") is not None
+
+
+def test_failed_queue_recovery_is_audited(operator_workspace):
+    client, store, _ = operator_workspace
+    store.add_event_once("dead-event", "unknown", {})
+    store.connection.execute("UPDATE events SET status='dead',attempts=5,last_error='bad payload'")
+    store.connection.commit()
+    response = client.post("/api/queues/events/dead-event/retry")
+    assert response.status_code == 200
+    assert client.post("/api/queues/events/dead-event/retry").status_code == 409
+    assert store.connection.execute("SELECT action FROM audit_log ORDER BY id DESC").fetchone()[0] == "queue_retried"
