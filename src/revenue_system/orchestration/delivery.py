@@ -7,6 +7,8 @@ from uuid import uuid4
 from revenue_system.adapters.db import LeaseLostError, SQLiteStore
 from revenue_system.adapters.errors import AmbiguousDeliveryError
 from revenue_system.domain.models import ActionType
+from revenue_system.governance.contract_review import verify_human_authorization
+from revenue_system.governance.messaging import outreach_error
 from revenue_system.skills.contracts import validate_contract
 
 
@@ -50,15 +52,28 @@ class OutboxDeliveryService:
                 if deal and "do_not_contact" in deal.flags and action_type != ActionType.SYNC_CRM:
                     self.store.record_outbox_failure(row["id"], "Contact unsubscribed", 1)
                     raise PermissionError("Contact unsubscribed; delivery is blocked")
+                if deal and "suspicious_reply" in deal.flags and action_type != ActionType.SYNC_CRM:
+                    self.store.record_outbox_failure(row["id"], "Suspicious contact is quarantined", 1)
+                    raise PermissionError("Suspicious contact is quarantined")
                 if action_type in {ActionType.SEND_FIRST_TOUCH, ActionType.SEND_FOLLOW_UP}:
                     recipient = payload.get("recipient") or self.fallback_recipient
                     if not recipient:
                         raise ValueError("approved mail action is missing recipient")
+                    if error := outreach_error(payload | {"recipient": recipient}):
+                        self.store.record_outbox_failure(row["id"], error, 1)
+                        raise PermissionError(error)
+                    if action_type == ActionType.SEND_FOLLOW_UP and deal and (deal.fields.get("last_reply") or deal.stage != "outreach"):
+                        with self.store.transaction():
+                            self.store.assert_claim("outbox", row["id"], self.owner)
+                            self.store.connection.execute("UPDATE outbox SET status='cancelled', claimed_by=NULL, lease_until=NULL WHERE id=?", (row["id"],))
+                            self.store.audit("delivery", "follow_up_cancelled", "Contact replied or left outreach", row["deal_id"])
+                        continue
                     provider_id = await asyncio.wait_for(self.mail.send(recipient, payload["subject"], payload["body"], row["id"]), self.lease_seconds * .8)
                 elif action_type == ActionType.SEND_CONTRACT:
                     if self.esign is None:
                         raise ValueError("e-signature adapter is not configured")
                     validate_contract(payload)
+                    verify_human_authorization(self.store, payload, row["deal_id"])
                     provider_id = await asyncio.wait_for(self.esign.send_for_signature(payload, row["id"]), self.lease_seconds * .8)
                 elif action_type == ActionType.SYNC_CRM:
                     if not self.crm or not self.settings or not self.settings.crm_sync_enabled or not self.settings.live_side_effects_enabled:

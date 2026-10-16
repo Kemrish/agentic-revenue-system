@@ -99,6 +99,6 @@ async def test_persisted_webhook_runs_through_the_real_worker(webhook_db):
     store = SQLiteStore(url)
     try:
         assert (await EventWorker(store).run_once(DealOrchestrator(store, runner=FakeRunner())))["processed"] == 1
-        assert store.get_approval("approval:send_first_touch:lead-1")["status"] == "pending"
+        assert not store.pending_approvals() and store.pending_outbox()[0]["action_type"] == "send_first_touch"
     finally:
         store.connection.close()

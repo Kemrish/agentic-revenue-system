@@ -9,12 +9,13 @@ class OutreachAgent:
         self.runner = runner
 
     async def draft(self, deal: Deal, pack: SegmentPack, lessons: list[str] | None = None,
-                    lesson_context: list[dict] | None = None) -> OutreachDraft:
+                    lesson_context: list[dict] | None = None, follow_up: bool = False) -> OutreachDraft:
         lessons = lessons or []
         products = ", ".join(pack.messaging.get("products", []))
         request = AgentRequest(
             agent_name="outreach",
-            task="Draft a concise first-touch message using only the supplied deal evidence and segment pack.",
+            task=("Draft a concise follow-up to unanswered outreach." if follow_up else "Draft a concise first-touch message.") +
+                 " Use only supplied evidence. Never quote or mention pricing, budgets, discounts, contracts, payment terms, percentages or guarantees. Sensitive commercial decisions belong exclusively to the human contract review. Ask a simple discovery question; do not invent commitments.",
             context={
                 "company_name": deal.company_name,
                 "contact_name": deal.contact_name,
@@ -22,6 +23,7 @@ class OutreachAgent:
                 "value_proposition": f"Cool AI can help with {products}.",
                 "lessons_used": lessons,
                 "lessons": lesson_context or [],
+                "message_kind": "follow_up" if follow_up else "first_touch",
             },
         )
         return await self.runner.run(request, OutreachDraft)

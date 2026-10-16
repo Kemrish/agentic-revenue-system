@@ -140,6 +140,13 @@ form .actions{margin-top:12px}form .hint{margin-top:8px}
 .clickable{cursor:pointer}
 
 /* Operator record details */
+.contract-editor{border:1px solid var(--line);background:var(--subtle);padding:20px;border-radius:12px;margin:14px 0 24px}
+.contract-editor label{display:grid;gap:5px;font-size:12px;font-weight:600;margin:8px 0}
+.contract-editor input,.contract-editor textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:7px;background:#fff}
+.contract-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}
+.contract-line{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto;gap:10px;align-items:end;margin-bottom:12px}
+.contract-line button{margin-bottom:8px}
+@media(max-width:600px){.contract-grid,.contract-line{grid-template-columns:1fr}}
 .kv-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
 .kv-grid div{background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px 11px}.kv-grid small{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
 .doc{background:#fff;border:1px solid var(--line);border-radius:10px;padding:22px 26px;font-family:Georgia,"Times New Roman",serif;white-space:pre-wrap;font-size:13.5px;line-height:1.7;box-shadow:inset 0 0 0 6px var(--subtle)}

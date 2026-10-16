@@ -36,10 +36,15 @@ async def test_provider_contact_retries_then_flows_through_scoring_approval_and_
     assert not store.get_deal("hubspot-contact-42")
     crm.fail = False
     assert (await worker.run_once(orchestrator))["processed"] == 1
-    assert store.pending_approvals()[0]["action_type"] == "send_first_touch"
-    delivery = OutboxDeliveryService(store, None, crm=crm, settings=settings)
-    assert await delivery.deliver_pending() == ["crm-sync:native-1"]
+    assert not store.pending_approvals()
+    class Mail:
+        async def send(self, *args):
+            return "mail-1"
+    delivery = OutboxDeliveryService(store, Mail(), crm=crm, settings=settings)
+    assert set(await delivery.deliver_pending()) == {"send_first_touch:hubspot-contact-42", "crm-sync:native-1"}
     assert crm.calls[0][0] == "42" and crm.calls[0][1]["ars_stage"] == "scored"
+    await worker.run_once(orchestrator)
+    await delivery.deliver_pending()
     await worker.run_once(orchestrator)
     assert store.pending_outbox() == []  # CRM delivery acknowledgement never loops.
     store.connection.close()

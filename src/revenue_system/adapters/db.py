@@ -60,6 +60,11 @@ class SQLiteStore:
             CREATE TABLE IF NOT EXISTS service_heartbeats (
                 service TEXT PRIMARY KEY, seen_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS contract_revisions (
+                approval_id TEXT NOT NULL, revision INTEGER NOT NULL, payload TEXT NOT NULL,
+                actor TEXT NOT NULL, created_at TEXT NOT NULL,
+                PRIMARY KEY(approval_id,revision)
+            );
             CREATE TABLE IF NOT EXISTS timers (
                 id TEXT PRIMARY KEY, deal_id TEXT NOT NULL, event_type TEXT NOT NULL, payload TEXT NOT NULL,
                 due_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'scheduled', created_at TEXT NOT NULL

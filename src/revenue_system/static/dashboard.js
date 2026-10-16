@@ -10,10 +10,10 @@ const MAIN_PATH = ['new','enriched','scored','outreach','engaged','meeting','qua
 const MAIL = ['send_first_touch','send_follow_up'];
 
 const titles = {
-  overview: ['Operate', 'Revenue command center', 'Observe proposals, govern risk, and trace approved work.'],
+  overview: ['Operate', 'Revenue command center', 'Automatic operations with one human checkpoint for sensitive contract terms.'],
   pipeline: ['Operate', 'Pipeline workspace', 'Inspect accounts, qualification evidence, scores, and lifecycle stages.'],
-  approvals: ['Operate', 'Approval center', 'Review the exact recipient and message before deciding.'],
-  outbox: ['Operate', 'Outbox operations', 'Inspect queued work, deliver permitted actions, and track the results.'],
+  approvals: ['Operate', 'Approval center', 'The human checkpoint: edit sensitive commercial terms, review the regenerated contract, then approve its exact version.'],
+  outbox: ['Operate', 'Outbox operations', 'Automatic delivery queue and provider evidence. Manual delivery is a maintenance option.'],
   lessons: ['Operate', 'Lesson library', 'Curate what the system learns from calls and rejections before agents may use it.'],
   audit: ['Operate', 'Audit trail', 'Trace scoring, decisions, rejection reasons, and provider delivery.'],
 };
@@ -25,7 +25,7 @@ function notice(message, error=false) { $('#notice').textContent=message; $('#no
 async function request(url, options={}) {
   const response=await fetch(url, {cache:'no-store', ...options});
   const data=await response.json().catch(()=>({detail:`Server returned ${response.status}.`}));
-  if(!response.ok) throw new Error(typeof data.detail==='string'?data.detail:'Check the form values and try again.');
+  if(!response.ok) throw new Error(typeof data.detail==='string'?data.detail:Array.isArray(data.detail)?data.detail.map(e=>`${(e.loc||[]).filter(x=>x!=='body').join('.')}: ${e.msg}`).join('\n'):'Check the form values and try again.');
   return data;
 }
 
@@ -38,7 +38,7 @@ function reviewButton(kind, id, label='Review details') {
   return `<button type="button" class="button secondary" data-command="review" data-kind="${kind}" data-id="${esc(id)}">${label}</button>`;
 }
 function approvals(items) {
-  return items.length?items.map(item=>`<div class="row"><div><strong>${esc(item.company)}</strong> ${badge(item.tier)} ${badge('require_approval', human(item.action_type))}<p>To: ${esc(item.payload.recipient || 'Recipient required')} · ${esc(item.payload.subject || (item.action_type==='send_contract'?'Insertion order for signature':'No subject'))}</p><p>${esc(item.policy_reason)}</p></div>${reviewButton('approvals',item.id)}</div>`).join(''):empty('No pending approvals. Decided requests appear in the history below.');
+  return items.length?items.map(item=>`<div class="row"><div><strong>${esc(item.company)}</strong> ${badge(item.tier)} ${badge('require_approval', human(item.action_type))}<p>To: ${esc(item.payload.recipient || item.payload.signer_email || 'Signer required')} · ${esc(item.payload.subject || (item.action_type==='send_contract'?`Contract revision ${item.payload.revision||1} — ${item.payload.review_status==='needs_terms'?'human terms needed':'review final document'}`:'No subject'))}</p><p>${esc(item.policy_reason)}</p></div>${reviewButton('approvals',item.id)}</div>`).join(''):empty('No pending approvals. Decided requests appear in the history below.');
 }
 function audit(items) {
   return items.length?table(['Time (UTC)','Actor','Action','Deal','Detail'], items.map(a=>`<tr><td class="mono">${esc(a.created_at)}</td><td>${esc(a.actor)}</td><td>${badge(a.action)}</td><td class="mono">${esc(a.deal_id || 'System')}</td><td>${esc(a.detail)}</td></tr>`).join('')):empty('No audit events match this view.');
@@ -77,7 +77,7 @@ function viewPipeline(d) {
   return `<section class="panel"><div class="panel-heading"><div><h2>All deals</h2><p class="hint">${d.deals.length} accounts. Open a deal to see its stage history, score breakdown, and audit trail.</p></div><input class="search" id="pipeline-search" aria-label="Search pipeline" placeholder="Search account, contact, or segment" value="${esc(state.search)}"></div><div class="filters" style="margin-bottom:14px">${chips}</div><div id="pipeline-results">${pipeline(filteredDeals(d))}</div></section>`;
 }
 function viewApprovals(d) {
-  return `<section class="panel"><div class="panel-heading"><div><h2>Pending approvals</h2><p class="hint">Open a proposal to inspect the recipient, full message, score, and policy reason.</p></div></div>${approvals(d.approvals)}</section><section class="panel"><h2>Decision history</h2><p class="hint">Rejections retain the operator's explanation.</p>${d.approval_history.length?table(['Account','Action','Decision','Reason','Details'],d.approval_history.map(x=>`<tr><td>${esc(x.company)}</td><td>${esc(human(x.action_type))}</td><td>${badge(x.status)}</td><td>${esc(x.rejection_reason || 'Approved for delivery')}</td><td>${reviewButton('history',x.id,'View decision')}</td></tr>`).join('')):empty('No decisions yet.')}</section>`;
+  return `<section class="panel"><div class="panel-heading"><div><h2>Pending approvals</h2><p class="hint">The single normal human checkpoint: edit sensitive terms, review the regenerated document, and approve its exact version.</p></div></div>${approvals(d.approvals)}</section><section class="panel"><h2>Decision history</h2><p class="hint">Rejections retain the operator's explanation.</p>${d.approval_history.length?table(['Account','Action','Decision','Reason','Details'],d.approval_history.map(x=>`<tr><td>${esc(x.company)}</td><td>${esc(human(x.action_type))}</td><td>${badge(x.status)}</td><td>${esc(x.rejection_reason || ({approved:'Human approved this version',auto_released:'Released by current policy — no human approval',denied:'Blocked by current safety policy'}[x.status] || 'See audit evidence'))}</td><td>${reviewButton('history',x.id,'View decision')}</td></tr>`).join('')):empty('No decisions yet.')}</section>`;
 }
 function viewOutbox(d) {
   const pending=d.outbox.filter(x=>x.status==='pending');
@@ -157,6 +157,17 @@ async function load() {
 
 
 /* ---------- review dialog (approvals, outbox) ---------- */
+function contractLineItem(item={}) {
+  return `<div class="contract-line" data-line-item><label>Description<input name="item_name" aria-label="Line item description" required maxlength="300" value="${esc(item.name||'')}"></label><label>Amount (USD)<input name="item_amount" aria-label="Line item amount" type="number" min="0.01" step="0.01" required value="${esc(item.amount??'')}"></label><button class="button secondary" type="button" data-command="remove-line-item">Remove</button></div>`;
+}
+function contractEditor(p) {
+  return `<form id="contract-form" class="contract-editor"><h3>Edit sensitive terms — human authority</h3><p class="hint">Revision ${p.revision||1}. Prices are never chosen by an agent. Save edits to regenerate the exact document, review the new version, then approve once. Delivery continues automatically.</p>${p.review_errors?.length?`<div class="banner error">Complete these terms before approval: ${p.review_errors.map(esc).join('; ')}</div>`:''}<div class="contract-grid"><label>Legal entity<input name="legal_entity" id="contract-legal-entity" required maxlength="300" value="${esc(p.legal_entity||'')}"></label><label>Total budget (USD)<input name="budget" id="contract-budget" type="number" min="0.01" step="0.01" required value="${p.budget>0?esc(p.budget):''}"></label><label>Start date<input name="start_date" id="contract-start" type="date" required value="${esc(p.start_date||'')}"></label><label>End date<input name="end_date" id="contract-end" type="date" required value="${esc(p.end_date||'')}"></label><label>Signer name<input name="signer_name" id="contract-signer-name" required maxlength="300" value="${esc(p.signer_name||'')}"></label><label>Signer email<input name="signer_email" id="contract-signer-email" type="email" required maxlength="254" value="${esc(p.signer_email||'')}"></label></div><h4>Line items — must sum to the budget</h4><div id="contract-line-items">${(p.line_items?.length?p.line_items:[{}]).map(contractLineItem).join('')}</div><button class="button secondary small" type="button" data-command="add-line-item">Add line item</button><label>Additional terms<textarea name="additional_terms" id="contract-additional" rows="3" maxlength="10000">${esc(p.additional_terms||'')}</textarea></label><p class="hint" id="contract-dirty" hidden>Unsaved edits. Save and review the regenerated document before approving.</p><button class="button secondary" type="submit">Save changes and regenerate preview</button></form>`;
+}
+function contractDirty() {
+  state.contractDirty=true;
+  if($('#contract-dirty')) $('#contract-dirty').hidden=false;
+  const approve=$('[data-command=approve]'); if(approve)approve.disabled=true;
+}
 function findReview() {
   const list={approvals:state.data.approvals,history:state.data.approval_history,outbox:state.data.outbox};
   return list[state.review?.kind]?.find(x=>x.id===state.review.id);
@@ -169,12 +180,18 @@ function openReview(kind,id) {
   const canSet=mail&&item.status==='pending'&&(kind==='approvals'||!item.payload.recipient);
   $('#review-title').textContent=`${canDecide?'Review':'Details'}: ${item.company}`;
   const p=item.payload;
+  state.review.revision=p.revision||1;state.review.artifact_sha256=p.artifact_sha256;
+  state.contractDirty=false;
   const body=mail?`<div class="message"><h3>${esc(p.subject || 'Subject missing')}</h3><pre>${esc(p.body || 'Message body missing')}</pre></div>`
-    :p.document?`<dl class="details"><div><dt>Signer</dt><dd>${esc(p.signer_name || 'Missing')} &lt;${esc(p.signer_email || 'Missing')}&gt;</dd></div><div><dt>Document SHA-256</dt><dd class="mono">${esc(p.artifact_sha256 || 'Unbound legacy contract — regenerate before approval')}</dd></div></dl>${p.artifact_sha256?`<a class="button secondary" href="/api/${kind==='history'?'approvals':kind}/${encodeURIComponent(id)}/document">Download reviewed DOCX</a>`:''}<div class="doc" style="margin:12px 0 18px">${esc(p.document)}</div>`:`<div class="message"><pre>${esc(JSON.stringify(p,null,2))}</pre></div>`;
+    :p.document?`<dl class="details"><div><dt>Signer</dt><dd>${esc(p.signer_name || 'Missing')} &lt;${esc(p.signer_email || 'Missing')}&gt;</dd></div><div><dt>Document SHA-256</dt><dd class="mono">${esc(p.artifact_sha256 || 'Human terms required — save the editor to generate the document')}</dd></div></dl>${p.artifact_sha256?`<a class="button secondary" href="/api/${kind==='history'?'approvals':kind}/${encodeURIComponent(id)}/document">Download reviewed DOCX</a>`:''}<div class="doc" style="margin:12px 0 18px">${esc(p.document)}</div>`:`<div class="message"><pre>${esc(JSON.stringify(p,null,2))}</pre></div>`;
   $('#review-content').innerHTML=`<dl class="details"><div><dt>Account / contact</dt><dd>${esc(item.company)} / ${esc(item.contact)}</dd></div><div><dt>Action / status</dt><dd>${esc(human(item.action_type))} ${badge(item.status)}</dd></div><div><dt>Recipient</dt><dd>${esc(p.recipient || p.signer_email || 'Not configured')}</dd></div><div><dt>Segment / score / tier</dt><dd>${esc(item.segment)} · ${esc(num(item.score))} · ${badge(item.tier)}</dd></div><div><dt>Created (UTC)</dt><dd>${esc(item.created_at)}</dd></div><div><dt>Policy reason</dt><dd>${esc(item.policy_reason)}</dd></div></dl><p class="hint">${esc(item.score_reason)}</p>${p.lessons_used?.length?`<p class="hint">Lessons used: ${p.lessons_used.map(l=>`<span class="chip">${esc(l)}</span>`).join('')}</p>`:''}${p.injection_detected?'<div class="banner error">This payload is flagged as unsafe. It cannot be approved or delivered.</div>':''}${item.rejection_reason?`<div class="banner error">Rejected: ${esc(item.rejection_reason)}</div>`:''}${body}${canSet?`<form id="recipient-form" class="recipient-form"><label for="recipient">Recipient email</label><input id="recipient" type="email" required maxlength="254" value="${esc(p.recipient || '')}" placeholder="Select a configured test recipient"><p class="hint">Allowed for live delivery: ${esc(state.data.runtime.allowed_recipients.join(', ')||'None configured')}. Saving the recipient does not send the message.</p><button type="submit" class="button secondary">Save recipient</button></form>`:''}`;
   $('#rejection-form').hidden=true; $('#rejection-reason').value=''; $('#review-error').hidden=true;
   $('#review-actions').hidden=false;
   $('#review-actions').innerHTML=canDecide?`<button class="button danger" type="button" data-command="reject-form">Reject with reason</button><button class="button" type="button" data-command="approve" ${mail&&(!p.recipient||!p.subject||!p.body)?'disabled':''}>Approve and queue</button>`:'<button class="button secondary" type="button" data-command="close">Done</button>';
+  if(canDecide&&item.action_type==='send_contract'){
+    $('#review-content').insertAdjacentHTML('afterbegin',contractEditor(p));
+    $('#review-actions').innerHTML=`<button class="button danger" type="button" data-command="reject-form">Reject with reason</button><button class="button" type="button" data-command="approve" ${p.review_status==='needs_terms'||!p.artifact_sha256?'disabled':''}>Approve version and resume automation</button>`;
+  }
   if(!$('#review-dialog').open) $('#review-dialog').showModal();
 }
 function closeReview(){if(state.busy)return;if($('#review-dialog').open)$('#review-dialog').close();state.review=null;}
@@ -225,8 +242,15 @@ document.addEventListener('click',async event=>{
   if(command==='close') closeReview();
   if(command==='deal') { if($('#deal-dialog').open && button.tagName==='TR') return; openDeal(button.dataset.id); }
   if(command==='close-deal') $('#deal-dialog').close();
-  if(command==='reject-form'){$('#rejection-form').hidden=false;$('#review-actions').hidden=true;$('#rejection-reason').focus();}
-  if(command==='approve') {const id=state.review.id;if(await mutate(`/api/approvals/${encodeURIComponent(id)}/approve`))closeReview();}
+  if(command==='reject-form'){$('#rejection-form').hidden=false;$('#review-actions').hidden=true;if($('#contract-form'))$('#contract-form').hidden=true;$('#rejection-reason').focus();}
+  if(command==='approve') {
+    if(state.contractDirty)return;
+    const {id,revision,artifact_sha256}=state.review;
+    const contract=findReview()?.action_type==='send_contract';
+    if(await mutate(`/api/approvals/${encodeURIComponent(id)}/approve`,contract?{revision,artifact_sha256}:null))closeReview();
+  }
+  if(command==='add-line-item'){$('#contract-line-items').insertAdjacentHTML('beforeend',contractLineItem());contractDirty();}
+  if(command==='remove-line-item'){button.closest('[data-line-item]').remove();contractDirty();}
   if(command==='delivery')openDelivery();
   if(command==='deliver'){if(await mutate('/api/outbox/deliver'))closeReview();}
   if(command==='queue-retry'){
@@ -238,6 +262,14 @@ document.addEventListener('click',async event=>{
 
 });
 document.addEventListener('submit',async event=>{
+  if(event.target.id==='contract-form') {
+    event.preventDefault();const form=new FormData(event.target);const {id,revision}=state.review;
+    const data={expected_revision:revision,legal_entity:form.get('legal_entity'),budget:Number(form.get('budget')),
+      start_date:form.get('start_date'),end_date:form.get('end_date'),signer_name:form.get('signer_name'),
+      signer_email:form.get('signer_email'),additional_terms:form.get('additional_terms'),
+      line_items:$$('#contract-line-items [data-line-item]').map(row=>({name:row.querySelector('[name=item_name]').value,amount:Number(row.querySelector('[name=item_amount]').value)}))};
+    if(await mutate(`/api/approvals/${encodeURIComponent(id)}/contract`,data,'PATCH'))openReview('approvals',id);
+  }
   if(event.target.id==='rejection-form') {
     event.preventDefault(); const reason=$('#rejection-reason').value.trim();
     if(!reason){$('#review-error').textContent='Please explain why this action should be rejected.';$('#review-error').hidden=false;return;}
@@ -250,6 +282,7 @@ document.addEventListener('submit',async event=>{
 });
 document.addEventListener('input',event=>{
   const t=event.target;
+  if(t.closest('#contract-form'))contractDirty();
   if(t.id==='pipeline-search'){state.search=t.value;$('#pipeline-results').innerHTML=pipeline(filteredDeals(state.data));}
 });
 document.addEventListener('change',event=>{
@@ -265,7 +298,7 @@ $('#kill-toggle').addEventListener('click',async()=>{
 });
 $('#close-review').addEventListener('click',closeReview);
 $('#review-dialog').addEventListener('cancel',event=>{if(state.busy)event.preventDefault();else state.review=null;});
-$('#cancel-rejection').addEventListener('click',()=>{$('#rejection-form').hidden=true;$('#review-actions').hidden=false;$('#review-error').hidden=true;});
+$('#cancel-rejection').addEventListener('click',()=>{$('#rejection-form').hidden=true;$('#review-actions').hidden=false;$('#review-error').hidden=true;if($('#contract-form'))$('#contract-form').hidden=false;});
 $('#refresh').addEventListener('click',load);
 window.addEventListener('hashchange',()=>{closeReview();if($('#deal-dialog').open)$('#deal-dialog').close();render();window.scrollTo(0,0);});
 // One refresh owner. Do not replace review content or draft rejection reasons while editing.

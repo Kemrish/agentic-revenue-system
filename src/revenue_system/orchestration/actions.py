@@ -4,11 +4,11 @@ from revenue_system.governance.policy import PolicyEngine
 from revenue_system.segments.schema import SegmentPack
 
 
-def route_action(store: SQLiteStore, action: Action, deal, pack: SegmentPack, policy: PolicyEngine | None = None) -> str:
+def route_action(store: SQLiteStore, action: Action, deal, pack: SegmentPack, policy: PolicyEngine | None = None, action_key: str | None = None) -> str:
     decision = (policy or PolicyEngine()).evaluate(action, deal, pack, kill_switch=store.flag_enabled("global_kill_switch"))
     store.audit("policy", decision.decision, f"{decision.rule_id}: {decision.reason}", deal.id)
     if decision.decision == "AUTO":
-        store.add_outbox_once(f"{action.action_type.value}:{deal.id}", action)
+        store.add_outbox_once(action_key or f"{action.action_type.value}:{deal.id}", action)
     elif decision.decision == "REQUIRE_APPROVAL":
         store.add_approval(f"approval:{action.action_type.value}:{deal.id}", action)
     return decision.decision

@@ -69,8 +69,10 @@ async def test_full_lifecycle_runs_through_events(system):
     assert deal.score.engagement == 80
     assert store.get_approval("approval:send_contract:d1")["status"] == "pending"
 
+    from tests.support.agents import approve_reviewed_contract
     from tests.unit.test_contract_integrity import contract
-    store.add_outbox_once("contract", Action(ActionType.SEND_CONTRACT, "d1", contract()))
+    store.add_approval("contract", Action(ActionType.SEND_CONTRACT, "d1", contract()))
+    approve_reviewed_contract(store, "contract")
 
     class ESign:
         async def send_for_signature(self, document, key):

@@ -153,9 +153,8 @@ async def test_inbound_lead_uses_active_lesson_content_and_routes_first_touch(st
     worker.ingest(DomainEvent("lead.created", "provider:1", lead))
     handler = DealOrchestrator(first, runner=Runner())
     assert (await worker.run_once(handler))["processed"] == 1
-    approval = first.get_approval("approval:send_first_touch:real-1")
-    assert approval is not None
-    assert json.loads(approval["payload"])["recipient"] == "review@example.com"
+    assert not first.pending_approvals()
+    assert json.loads(first.pending_outbox()[0]["payload"])["recipient"] == "review@example.com"
     assert requests[0].context["lessons"][0]["statement"] == "Explain measured lift"
     assert requests[0].context["lessons_used"] == ["active"]
     handler.advance("real-1", "outreach", "sent")
@@ -204,12 +203,12 @@ async def test_worker_resumes_after_interrupted_drafting(stores):
 
     worker = EventWorker(first)
     worker.ingest(DomainEvent("lead.created", "lead-1", {"lead_id":"account-1", "segment":"brand",
-                  "company_name":"Account", "contact_name":"Amina", "fit":90, "intent":80}))
+                  "company_name":"Account", "contact_name":"Amina", "fit":90, "intent":80, "email":"a@example.com"}))
     assert (await worker.run_once(DealOrchestrator(first, runner=FailingRunner())))["failed"] == 1
     assert first.connection.execute("SELECT status FROM events").fetchone()[0] == "pending"
     assert first.get_deal("account-1") is None
     assert (await worker.run_once(DealOrchestrator(first, runner=FakeRunner())))["processed"] == 1
-    assert first.get_approval("approval:send_first_touch:account-1") is not None
+    assert len(first.pending_outbox()) == 1 and not first.pending_approvals()
 
 
 def test_signed_event_requires_delivered_contract_evidence(stores):

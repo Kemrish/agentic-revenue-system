@@ -26,3 +26,13 @@ class FakeRunner:
         if response is None:
             raise KeyError(f"No test response for {request.agent_name}")
         return output_type.model_validate(response)
+
+
+def approve_reviewed_contract(store, approval_id):
+    """A test human approves the exact snapshot it just inspected."""
+    import json
+
+    from revenue_system.governance.approvals import ApprovalService
+    payload = json.loads(store.get_approval(approval_id)["payload"])
+    return ApprovalService(store).decide(approval_id, True, actor="human:test",
+        expected_revision=payload.get("revision", 1), artifact_sha256=payload["artifact_sha256"])

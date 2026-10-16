@@ -33,6 +33,7 @@ class SegmentPack(BaseModel):
     templates: TemplateConfig
     autonomy: dict[str, list[str]] = Field(default_factory=dict)
     sla_days: dict[str, int] = Field(default_factory=dict)
+    follow_up_limit: int = Field(default=2, ge=0, le=5)
 
     @field_validator("sla_days")
     @classmethod

@@ -21,10 +21,10 @@ templates:
   follow_up: templates/follow_up.md.j2
   contract: templates/supply_agreement.md.j2
 autonomy:
+  auto: [first_touch, follow_up, scoring, triage, qualification]
   require_approval:
-    - first_touch_tier_a
-    - pricing
     - contract_send
+follow_up_limit: 2
 sla_days:
   outreach: 7
   engaged: 10

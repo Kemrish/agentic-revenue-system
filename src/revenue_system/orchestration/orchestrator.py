@@ -3,7 +3,7 @@ from pathlib import Path
 
 from revenue_system.adapters.db import SQLiteStore
 from revenue_system.agents.call_intelligence import CallIntelligenceAgent
-from revenue_system.agents.deal_desk import DealDeskAgent, repair_from_supplied_data
+from revenue_system.agents.deal_desk import IODraft, repair_from_supplied_data
 from revenue_system.agents.outreach import OutreachAgent
 from revenue_system.agents.reply_triage import ReplyTriageAgent
 from revenue_system.domain.models import Action, ActionType, Deal
@@ -64,6 +64,8 @@ class DealOrchestrator:
             deal = await self._on_reply(event)
         elif event.event_type == "transcript.ready":
             deal = await self._on_transcript(event)
+        elif event.event_type == "timer.due":
+            deal = await self._on_follow_up_timer(event)
         else:
             deal = self.handle(event)
         if self.crm_sync_enabled and deal and deal.fields.get("hubspot_contact_id") and not (
@@ -205,12 +207,16 @@ class DealOrchestrator:
         runner = self._require_runner()
         transcript_id = payload.get("transcript_id") or event.event_id
         digest = await CallIntelligenceAgent(runner).digest(payload["transcript"], pack.qualification_fields)
-        missing = [name for name in pack.qualification_fields if not digest.qualification_fields.get(name)]
+        # Commercial qualification is confirmed by the human contract checkpoint,
+        # not invented by call intelligence just to pass a stage gate.
+        sensitive = {"budget", "price", "pricing", "legal_entity", "start_date", "end_date", "line_items"}
+        missing = [name for name in pack.qualification_fields if name not in sensitive and not digest.qualification_fields.get(name)]
         terms = payload.get("deal_terms") or {}
-        io_inputs = digest.qualification_fields | {"legal_entity": deal.company_name} | terms
-        io_draft = None
-        if not missing and terms:
-            io_draft = repair_from_supplied_data(await DealDeskAgent(runner).draft(io_inputs, pack), terms)
+        empty = IODraft(legal_entity="", budget=0, start_date="", end_date="", line_items=[])
+        try:
+            io_draft = repair_from_supplied_data(empty, terms)
+        except (ValueError, TypeError):
+            io_draft = empty
 
         self.try_advance(deal.id, "meeting", "call transcript received")
         self.store.audit("agent:call_intelligence", "call_digested",
@@ -222,20 +228,39 @@ class DealOrchestrator:
             return self._deal(deal.id)
         if not self.try_advance(deal.id, "qualified", "all pack qualification fields captured", digest.qualification_fields):
             return self._deal(deal.id)
-        if io_draft is None:
-            self.store.audit("orchestrator", "io_waiting", "Commercial terms not yet available; IO not generated", deal.id)
-            return self._deal(deal.id)
         errors = validate_io(io_draft.as_io_data())
-        self.store.audit("agent:deal_desk", "io_drafted", f"valid={not errors} errors={errors or 'none'}", deal.id)
-        if errors:
-            self.store.audit("orchestrator", "io_invalid", "; ".join(errors), deal.id)
-            return self._deal(deal.id)
+        self.store.audit("system:deal_desk", "io_drafted", f"valid={not errors} errors={errors or 'none'}; human review required", deal.id)
         rendered = TemplateRenderer(self.packs_root).render(f"{pack.segment}/{pack.templates.contract}",
                                                              {**io_draft.model_dump(), "line_items": io_draft.line_items})
-        deal = self.advance(deal.id, "proposal", "IO generated and validated")
-        contract = bind_contract({"document": rendered, **io_draft.model_dump()},
-                                 deal.fields.get("email", ""), deal.contact_name)
+        deal = self.advance(deal.id, "proposal", "Contract draft ready for the human commercial checkpoint")
+        if errors:
+            rendered = "DRAFT — Human commercial input required\n\nAccount: " + deal.company_name + "\n\nNo price or legal commitment has been approved. Complete the sensitive terms in the contract editor."
+        base = {"document": rendered, **io_draft.model_dump()}
+        contract = (base | {"signer_email": deal.fields.get("email", ""), "signer_name": deal.contact_name}) if errors else bind_contract(base, deal.fields.get("email", ""), deal.contact_name)
+        contract.update(revision=1, review_status="needs_terms" if errors else "ready", review_errors=errors,
+                        additional_terms="", terms_source="supplied_data" if terms else "missing - human input required")
         route_action(self.store, Action(ActionType.SEND_CONTRACT, deal.id, contract), deal, pack)
+        return deal
+
+    async def _on_follow_up_timer(self, event: DomainEvent) -> Deal:
+        deal = self._on_timer(event)
+        pack = self.packs.get(deal.segment)
+        if deal.stage != "outreach" or event.payload.get("stage") != "outreach" or deal.fields.get("last_reply"):
+            return deal
+        count = self.store.connection.execute("SELECT COUNT(*) FROM outbox WHERE deal_id=? AND action_type='send_follow_up'", (deal.id,)).fetchone()[0]
+        pending = self.store.connection.execute("SELECT 1 FROM outbox WHERE deal_id=? AND action_type='send_follow_up' AND status IN ('pending','delivering')", (deal.id,)).fetchone()
+        if count >= pack.follow_up_limit or pending or set(deal.flags) & {"do_not_contact", "suspicious_reply"}:
+            return deal
+        if self.store.flag_enabled("global_kill_switch"):
+            self.store.schedule_timer(f"sla:{deal.id}", deal.id, "timer.due", datetime.now(timezone.utc) + timedelta(days=1), event.payload)
+            return deal
+        draft = await OutreachAgent(self._require_runner()).draft(deal, pack, follow_up=True)
+        sequence = count + 1
+        result = route_action(self.store, Action(ActionType.SEND_FOLLOW_UP, deal.id,
+                              {"recipient": deal.fields.get("email"), "subject": draft.subject,
+                               "body": draft.body, "follow_up_sequence": sequence}), deal, pack,
+                              action_key=f"send_follow_up:{deal.id}:{sequence}")
+        self.store.audit("agent:outreach", "follow_up_proposed", f"sequence={sequence} decision={result}", deal.id)
         return deal
 
     def _on_delivered(self, event: DomainEvent) -> Deal:
@@ -244,6 +269,11 @@ class DealOrchestrator:
             self.try_advance(payload["deal_id"], "contracting", "contract sent for signature")
         elif payload["action_type"] in {ActionType.SEND_FIRST_TOUCH.value, ActionType.SEND_FOLLOW_UP.value}:
             self.try_advance(payload["deal_id"], "outreach", "outreach delivered")
+            deal = self._deal(payload["deal_id"])
+            if payload["action_type"] == ActionType.SEND_FOLLOW_UP.value and deal.stage == "outreach" and not deal.fields.get("last_reply"):
+                days = self.packs.get(deal.segment).sla_days.get("outreach", 7)
+                self.store.schedule_timer(f"sla:{deal.id}", deal.id, "timer.due", datetime.now(timezone.utc) + timedelta(days=days),
+                                          {"deal_id": deal.id, "stage": "outreach", "sla_days": days})
         return self._deal(payload["deal_id"])
 
     def _on_signed(self, event: DomainEvent) -> Deal:
@@ -272,3 +302,35 @@ class DealOrchestrator:
             self.store.save_deal(deal)
             self.store.audit("orchestrator", "deal_stalled", result.reason, deal.id)
         return deal
+
+    def release_routine_reviews(self) -> None:
+        """Migrate pending routine gates under current policy, never human rejections."""
+        import json
+
+        from revenue_system.governance.policy import PolicyEngine
+        if self.store.flag_enabled("global_kill_switch"):
+            return
+        for row in self.store.pending_approvals():
+            if row["action_type"] not in {"send_first_touch", "send_follow_up"}:
+                continue
+            deal = self.store.get_deal(row["deal_id"])
+            if not deal:
+                continue
+            action = Action(ActionType(row["action_type"]), deal.id, json.loads(row["payload"]))
+            decision = PolicyEngine().evaluate(action, deal, self.packs.get(deal.segment))
+            if decision.decision == "DENY":
+                with self.store.transaction():
+                    updated = self.store.connection.execute("UPDATE approvals SET status='denied' WHERE id=? AND status='pending' AND payload=?", (row["id"], row["payload"]))
+                    if updated.rowcount:
+                        self.store.audit("policy", "DENY", f"Legacy routine gate {row['id']}: {decision.reason}", deal.id)
+                continue
+            if decision.decision != "AUTO":
+                continue
+            with self.store.transaction():
+                updated = self.store.connection.execute("UPDATE approvals SET status='auto_released' WHERE id=? AND status='pending' AND payload=?", (row["id"], row["payload"]))
+                if updated.rowcount != 1:
+                    continue
+                existing = self.store.connection.execute("SELECT 1 FROM outbox WHERE deal_id=? AND action_type=?", (deal.id, row["action_type"])).fetchone()
+                if not existing:
+                    self.store.add_outbox_once(f"{row['action_type']}:{deal.id}", action)
+                self.store.audit("policy", "AUTO", f"Removed legacy routine approval gate {row['id']}; no human approval fabricated", deal.id)

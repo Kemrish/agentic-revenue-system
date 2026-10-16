@@ -56,11 +56,13 @@ async def test_contract_delivery_uses_esign_adapter(tmp_path):
     from tests.unit.test_contract_integrity import contract
     store = SQLiteStore(f"sqlite:///{tmp_path / 'esign-delivery.db'}")
     payload = contract()
-    store.add_outbox_once("contract", Action(ActionType.SEND_CONTRACT, "d1", payload))
+    from tests.support.agents import approve_reviewed_contract
+    store.add_approval("contract", Action(ActionType.SEND_CONTRACT, "d1", payload))
+    approve_reviewed_contract(store, "contract")
 
     class ESign:
         async def send_for_signature(self, document, key):
-            assert document == payload
+            assert {k:v for k,v in document.items() if k!='human_approval'} == payload
             return "signature-1"
 
-    assert await OutboxDeliveryService(store, FakeMail(), esign=ESign()).deliver_pending() == ["contract"]
+    assert await OutboxDeliveryService(store, FakeMail(), esign=ESign()).deliver_pending() == ["approved:contract"]

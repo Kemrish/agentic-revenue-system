@@ -62,6 +62,9 @@ class EventWorker:
             return False
 
     async def run_once(self, orchestrator: DealOrchestrator, event_types: set[str] | None = None) -> dict[str, int]:
+        release = getattr(orchestrator, "release_routine_reviews", None)
+        if event_types is None and release is not None:
+            release()
         timers = self.fire_due_timers() if event_types is None or "timer.due" in event_types else 0
         processed = failed = 0
         for event in self.pending(event_types):
@@ -80,6 +83,9 @@ class EventWorker:
             result = await self.run_once(orchestrator)
             if delivery is not None:
                 await delivery.deliver_pending(continue_on_error=True)
+                # Delivery acknowledgements are deterministic and should not
+                # require another operator step or poll cycle to update stages.
+                await self.run_once(orchestrator, {"action.delivered"})
             if result["processed"] or result["failed"] or result["timers_fired"]:
                 logger.info("Worker cycle: %s", result)
             try:

@@ -18,6 +18,7 @@ from .adapters.db import SQLiteStore
 from .container import build_container
 from .domain.models import Action, ActionType
 from .governance.approvals import ApprovalService
+from .governance.contract_review import ContractApproval, ContractEdit, edit_contract
 from .governance.policy import PolicyEngine
 from .orchestration.delivery import OutboxDeliveryService
 from .orchestration.orchestrator import DealOrchestrator
@@ -155,6 +156,7 @@ def overview():
             return store.connection.execute(query).fetchone()[0]
         return {
             "runtime": {"provider": settings.llm_provider, "mode": settings.runtime_mode,
+                        "automation": "contract_review_only",
                         "mail_mode": settings.mail_mode, "live_side_effects_enabled": settings.live_side_effects_enabled,
                         "kill_switch": store.flag_enabled("global_kill_switch"),
                         "allowed_recipients": [v.strip() for v in settings.mail_allowed_recipients.split(",") if v.strip()]},
@@ -169,8 +171,8 @@ def overview():
             "health": store.health() | {"stalled_deals": sum("stalled" in d["flags"] for d in deals)},
             "failed_events": rows(store, "SELECT id,event_type,status,attempts,last_error,next_attempt_at FROM events WHERE status='dead' ORDER BY created_at DESC LIMIT 100"),
             "scenarios": [
-                {"name": "Automatic", "decision": "AUTO", "reason": "Permitted actions enter the outbox without human review."},
-                {"name": "Human approval", "decision": "REQUIRE_APPROVAL", "reason": "Tier-A first touch and commercial actions need review."},
+                {"name": "Automatic", "decision": "AUTO", "reason": "Routine outreach, bounded follow-ups and processing execute automatically."},
+                {"name": "Human approval", "decision": "REQUIRE_APPROVAL", "reason": "Review/edit sensitive contract terms and approve the exact version; the worker resumes automatically."},
                 {"name": "Denied", "decision": "DENY", "reason": "Unsafe or injection-flagged actions are blocked."},
                 {"name": "Emergency stop", "decision": "KILL_SWITCH", "reason": "The global switch pauses routing and delivery."},
             ],
@@ -200,7 +202,7 @@ def download_contract(collection: str, item_id: str):
 
 
 @app.post("/api/approvals/{approval_id}/approve")
-def approve(approval_id: str, actor: str = Depends(operator)):
+def approve(approval_id: str, review: ContractApproval | None = None, actor: str = Depends(operator)):
     with dashboard_store() as (settings, store):
         row = store.get_approval(approval_id)
         if not row:
@@ -216,11 +218,31 @@ def approve(approval_id: str, actor: str = Depends(operator)):
             validate_recipient(payload["recipient"], settings)
             if not payload.get("subject") or not payload.get("body"):
                 raise HTTPException(400, "A subject and message body are required.")
+        if row["action_type"] == "send_contract":
+            if not review:
+                raise HTTPException(409, "Review the current contract version and fingerprint before approving")
+            if settings.runtime_mode == "live" and settings.esign_mode == "live" and payload.get("signer_email") not in {v.strip() for v in settings.esign_allowed_recipients.split(",") if v.strip()}:
+                raise HTTPException(400, "The signer must be on ESIGN_ALLOWED_RECIPIENTS before approval")
         try:
-            ApprovalService(store).decide(approval_id, True, actor=actor)
+            ApprovalService(store).decide(approval_id, True, actor=actor,
+                                          expected_revision=review.revision if review else None,
+                                          artifact_sha256=review.artifact_sha256 if review else None)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
-        return {"message": "Approved. The reviewed action is queued; delivery is a separate step."}
+        return {"message": "Approved exact version. The worker will deliver it automatically when execution is enabled; no second approval is required."}
+
+
+@app.patch("/api/approvals/{approval_id}/contract")
+def update_contract(approval_id: str, changes: ContractEdit, actor: str = Depends(operator)):
+    with dashboard_store() as (settings, store):
+        if settings.runtime_mode == "live" and settings.esign_mode == "live" and changes.signer_email.strip() not in {v.strip() for v in settings.esign_allowed_recipients.split(",") if v.strip()}:
+            raise HTTPException(400, "The signer must be on ESIGN_ALLOWED_RECIPIENTS")
+        try:
+            payload = edit_contract(store, approval_id, changes, actor, settings.packs_root)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"message": f"Saved revision {payload['revision']}. Review the regenerated document before approving.",
+                "revision": payload["revision"], "artifact_sha256": payload["artifact_sha256"]}
 
 
 @app.post("/api/approvals/{approval_id}/reject")

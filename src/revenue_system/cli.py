@@ -63,9 +63,23 @@ def list_approvals() -> None:
 
 
 @approvals_app.command("approve")
-def approve(approval_id: str) -> None:
-    event = ApprovalService(build_container().store).decide(approval_id, True, actor="human:cli")
+def approve(approval_id: str, revision: int | None = typer.Option(None, "--revision"),
+            fingerprint: str | None = typer.Option(None, "--fingerprint")) -> None:
+    event = ApprovalService(build_container().store).decide(approval_id, True, actor="human:cli",
+                                                          expected_revision=revision, artifact_sha256=fingerprint)
     typer.echo(f"approved: {event.payload['approval_id']}; action queued in outbox")
+
+
+@approvals_app.command("edit-contract")
+def edit_contract_cli(approval_id: str, file: Path = typer.Option(..., "--file", exists=True)) -> None:
+    from .governance.contract_review import ContractEdit, edit_contract
+    store = SQLiteStore(Settings().database_url)
+    try:
+        changes = ContractEdit.model_validate(json.loads(file.read_text(encoding="utf-8")))
+        result = edit_contract(store, approval_id, changes, "human:cli", Settings().packs_root)
+        typer.echo(f"saved revision={result['revision']} sha256={result['artifact_sha256']}; review before approving")
+    finally:
+        store.connection.close()
 
 
 @approvals_app.command("reject")
@@ -98,7 +112,7 @@ def deliver_approved() -> None:
 
 @app.command()
 def worker(once: bool = typer.Option(False, "--once", help="Process pending events once and exit."),
-           deliver: bool = typer.Option(False, "--deliver", help="Also deliver permitted outbox actions using configured adapters.")) -> None:
+           deliver: bool = typer.Option(True, "--deliver/--no-deliver", help="Automatically deliver permitted actions; use --no-deliver for processing-only maintenance.")) -> None:
     """Process webhook events, SLA timers, and delivery outcomes."""
     import logging
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -117,6 +131,7 @@ def worker(once: bool = typer.Option(False, "--once", help="Process pending even
             typer.echo(str(asyncio.run(events.run_once(orchestrator))))
             if delivery is not None:
                 typer.echo(f"delivered: {len(asyncio.run(delivery.deliver_pending(continue_on_error=True)))}")
+                asyncio.run(events.run_once(orchestrator, {"action.delivered"}))
                 if delivery.failures:
                     raise typer.Exit(1)
             return

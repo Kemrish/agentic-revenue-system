@@ -11,6 +11,7 @@ import base64
 import hashlib
 import hmac
 import json
+import socket
 import threading
 import time
 from pathlib import Path
@@ -21,6 +22,7 @@ from fastapi.testclient import TestClient
 from revenue_system.adapters.db import SQLiteStore
 from revenue_system.container import Container
 from revenue_system.governance.provider_security import reply_token
+from revenue_system.orchestration.delivery import OutboxDeliveryService
 from revenue_system.orchestration.orchestrator import DealOrchestrator
 from revenue_system.orchestration.provider_events import ProviderEventResolver
 from revenue_system.orchestration.worker import EventWorker
@@ -101,7 +103,12 @@ def emit(client: TestClient, kind: str, deal_id: str = ""):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8010)
+    parser.add_argument("--manual-events", action="store_true", help="Emit customer replies/calls/signatures manually instead of simulating them automatically")
     args = parser.parse_args()
+    # Reserve the port before touching data or starting the worker. A second
+    # invocation must not run automation behind a different, stale UI process.
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", args.port))
     root = Path(".local-sandbox")
     root.mkdir(exist_ok=True)
     settings = sandbox_settings(root / "sandbox.db")
@@ -121,9 +128,8 @@ def main():
             if kind == "call":
                 if deal.stage != "engaged":
                     raise HTTPException(409, "Emit and process the reply first")
-                deal.fields["commercial_terms"] = {"legal_entity": deal.company_name, "budget": 1000,
-                    "start_date": "2026-11-01", "end_date": "2027-01-31", "line_items": [{"name": "Sandbox service", "amount": 1000}]}
-                store.save_deal(deal)
+                # Sensitive terms are intentionally NOT seeded: the operator
+                # supplies them in the single contract review checkpoint.
             if kind == "signed":
                 row = store.connection.execute("SELECT provider_id FROM outbox WHERE deal_id=? AND action_type='send_contract' AND status='sent'", (deal_id,)).fetchone()
                 if not row:
@@ -145,13 +151,30 @@ def main():
         container = sandbox_container(settings)
         try:
             orchestrator = DealOrchestrator(container.store, runner=container.runner, providers=ProviderEventResolver(container))
-            asyncio.run(EventWorker(container.store).run_forever(orchestrator, poll_seconds=1))
+            delivery = OutboxDeliveryService(container.store, container.mail, esign=container.esign)
+            worker = EventWorker(container.store)
+            async def automate():
+                while True:
+                    container.store.heartbeat()
+                    await worker.run_once(orchestrator)
+                    await delivery.deliver_pending(continue_on_error=True)
+                    await worker.run_once(orchestrator, {"action.delivered"})
+                    if not args.manual_events:
+                        for row in container.store.connection.execute("SELECT id,stage FROM deals").fetchall():
+                            kind = {"outreach": "reply", "engaged": "call", "contracting": "signed"}.get(row["stage"])
+                            if kind:
+                                await asyncio.to_thread(simulate_event, row["id"], kind)
+                    await asyncio.sleep(1)
+            asyncio.run(automate())
         finally:
             container.store.connection.close()
     threading.Thread(target=run_worker, daemon=True).start()
-    print(f"LOCAL SIMULATION ONLY: http://127.0.0.1:{args.port} — no real models, credentials or external sends")
+    print(f"LOCAL SIMULATION ONLY: http://127.0.0.1:{args.port} — no real models, credentials or external sends. Automatic workflow; human contract review only.")
     import uvicorn
-    uvicorn.run(dashboard.app, host="127.0.0.1", port=args.port)
+    try:
+        uvicorn.Server(uvicorn.Config(dashboard.app, host="127.0.0.1", port=args.port)).run(sockets=[listener])
+    finally:
+        listener.close()
 
 
 if __name__ == "__main__":

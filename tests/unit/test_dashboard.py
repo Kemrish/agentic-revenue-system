@@ -49,7 +49,7 @@ def test_review_contains_message_and_policy_evidence(operator_workspace):
     assert item["company"] == "Review Account"
     assert item["payload"]["body"] == "Exact message for review"
     assert item["payload"]["recipient"] == "review@example.com"
-    assert "tier A" in item["policy_reason"]
+    assert "automatic" in item["policy_reason"]
     assert client.get("/static/dashboard.js").status_code == 200
 
 
@@ -62,7 +62,7 @@ def test_contract_review_download_is_the_exact_approved_artifact(operator_worksp
     response = client.get("/api/approvals/contract-1/document")
     assert response.status_code == 200 and response.content == validate_contract(payload)
     assert response.headers["cache-control"] == "no-store"
-    assert client.post("/api/approvals/contract-1/approve").status_code == 200
+    assert client.post("/api/approvals/contract-1/approve", json={"revision":1, "artifact_sha256":payload["artifact_sha256"]}).status_code == 200
     store.add_approval("legacy-contract", Action(ActionType.SEND_CONTRACT, "d1", {"document": "Unbound"}))
     assert client.post("/api/approvals/legacy-contract/approve").status_code == 409
     assert client.get("/api/approvals/legacy-contract/document").status_code == 409
