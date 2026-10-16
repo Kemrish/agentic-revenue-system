@@ -12,29 +12,38 @@ From the source checkout after installing `.[dev,browser]`:
 
 Open `http://127.0.0.1:8010`. The provider label explicitly says **SIMULATED - no real sends**. The harness never reads `.env` and uses a separate ignored `.local-sandbox/sandbox.db`. It binds only to localhost. Never expose this unauthenticated test service through a tunnel or reverse proxy.
 
-Two synthetic contacts enter through signed HubSpot-style notifications. They are processed into the brand and publisher pipelines. Re-running the harness resumes its own database; it never resets production data.
+Two synthetic contacts enter through signed HubSpot-style notifications. By default the sandbox automatically simulates customer replies, call notifications and completed signatures as their stages permit. All of these are synthetic external events; it never fabricates human contract approval. Re-running resumes its own database and does not reset production data. A second instance refuses an occupied port before it can start another worker.
 
 ## Exercise the workflow
 
-1. Open Approvals. Review the first-touch subject, body, contact and policy reason. Approve the brand contact; optionally reject the publisher contact with a reason to inspect the rejection count and proposed lesson.
-2. Open Outbox, review the delivery batch, then deliver. The provider ID begins with `simulated-mail-`; no email is sent.
-3. Emit a simulated reply from another PowerShell window:
+1. Open Pipeline/Audit. Watch scoring, automatic first-touch sending, simulated reply classification and call qualification. No outreach approval or Outbox delivery click is required. In a few worker cycles the deals reach proposal.
+2. Open Approvals -> Review details for Sandbox Brand. This is the sole normal human checkpoint. Missing prices and dates are intentionally left for you, not filled by the model.
+3. Enter a legal entity, budget (for example USD 1,000), start/end dates, one matching line item, and a signer. Keep the sandbox signer `contact@sandbox.invalid` to distinguish it from a real address. Optionally enter additional commercial wording.
+4. Click Save changes and regenerate preview. Review revision 2, the exact document text and fingerprint. Download the reviewed DOCX if desired. Unsaved edits disable approval; mismatched amounts or invalid dates are rejected.
+5. Click Approve version and resume automation. The worker delivers automatically through the test e-sign provider, then the simulator emits a signed completion callback. Watch proposal -> contracting -> closed_won in Audit. There is no separate human delivery action.
+6. Optionally reject the publisher's contract with a reason. The rejected card/history and proposed lesson demonstrate that the system does not ignore or auto-reverse a commercial rejection.
+
+Inspect Outbox for `simulated-mail-` and `simulated-signature-` evidence. No real email/signature is sent. Emergency stop still pauses dispatch. The UI polls every ten seconds; Refresh can show the next worker cycle sooner. Do not enter real sensitive customer data into this unauthenticated local test service.
+
+## Optional manual external-event controls
+
+For a slower presentation, start with `--manual-events` to disable automatic simulation of customer replies/calls/signatures. Routine system delivery remains automatic. These controls represent external customer/provider events, not additional internal approval gates.
 
 ```powershell
 Invoke-RestMethod -Method Post http://127.0.0.1:8010/sandbox/hubspot-contact-101/reply
 ```
 
-The receiver verifies a Resend-style signed notification; the worker fetches the synthetic email, correlates its opaque reply address and moves the deal to engaged.
+After automatic first-touch delivery, the command above emits a signed Resend-style reply and moves the deal to engaged.
 
-4. Emit a simulated call:
+Then emit a simulated call:
 
 ```powershell
 Invoke-RestMethod -Method Post http://127.0.0.1:8010/sandbox/hubspot-contact-101/call
 ```
 
-This test scenario supplies explicit commercial terms, verifies a Fireflies V2-style notification and fetches a synthetic transcript. The deal reaches proposal. Review the contract's exact text, signer and SHA-256 fingerprint; download its DOCX. Approve and deliver it through the simulated e-sign adapter.
+The deal reaches proposal. Complete the human contract editor, save, inspect, and approve. No synthetic price is supplied automatically. The worker dispatches the authorized document without a delivery click.
 
-5. Emit the completed signature:
+After it reaches contracting, emit the completed signature:
 
 ```powershell
 Invoke-RestMethod -Method Post http://127.0.0.1:8010/sandbox/hubspot-contact-101/signed

@@ -82,6 +82,8 @@ Reason: the current workload does not justify their operational cost. Introduce 
 
 ## Production-hardening decisions (2026-10-15)
 
+Policy update 2026-10-16: the operator requested routine automation with one human commercial checkpoint. [Automation policy](automation.md) supersedes earlier first-touch approval rules: non-commercial outreach is automatic for every tier, standalone agent price changes are denied, and only the edited exact contract revision requires normal human approval. Safety and deployment gates remain unchanged.
+
 ### Canonical commercial inputs, not model authority
 
 All commercial fields are reconstructed from explicit upstream/operator terms, including legal entity and dates even when a model returned nonempty alternatives. Missing terms remain missing; schema/arithmetic validation is still required. This sacrifices model freedom to fill gaps in exchange for preventing invented legal commitments. Corrections to a proposed contract require a new review rather than editing an approved artifact.

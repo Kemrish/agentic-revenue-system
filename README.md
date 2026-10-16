@@ -78,7 +78,9 @@ python -m revenue_system.cli webhooks
 python -m revenue_system.cli worker
 ```
 
-Add `--deliver` to the worker command to deliver permitted queued actions automatically. Human approval remains required where policy demands it. Without that option, an operator can review the delivery batch from Outbox or invoke `approvals deliver`.
+The worker delivers permitted queued actions **automatically by default**, including with `--once`. Use `worker --no-deliver` for processing-only maintenance. Routine first-touch outreach is automatic for every tier. Unanswered-message follow-ups are bounded by each pack's `follow_up_limit` and stop on reply, consent/safety flags, or leaving outreach. No second human click is required to deliver an approved contract. External-write opt-in, recipient allowlists and the kill switch still apply.
+
+The sole normal human checkpoint is **contract review**: edit legal entity, prices/budget, dates, line items, signer and additional terms; save to regenerate the exact document; review/download it; approve its current revision and fingerprint. Missing sensitive values are never invented to bypass this checkpoint. Any edit invalidates the previous review. Standalone agent pricing changes are denied. See [automation policy](docs/automation.md).
 
 Production dashboard access requires a configured password. Use HTTPS at a trusted reverse proxy for remote deployment. The current authentication supports one configured operator, not multi-user roles or SSO.
 
@@ -96,12 +98,12 @@ The worker persists a score and tier, retrieves active lesson statements, drafts
 
 - **Command center:** stable operational totals and actual policy decisions.
 - **Pipeline:** account details, scoring evidence, stages, and audit history.
-- **Approvals:** exact recipient/message or document, policy reason, and approve/reject decisions. Rejection requires a reason and proposes a lesson.
+- **Approvals:** the contract checkpoint, with editable sensitive terms, regenerated preview/DOCX, version-safe approval and rejection with a reason. Historical routine reviews remain auditable.
 - **Outbox:** reviewed destinations, explicit delivery, provider results, and failure recovery.
 - **Lessons:** review and promotion of proposed learning records.
 - **Audit trail:** operator attribution, stage transitions, denials, delivery evidence, and queue recovery.
 
-`AUTO` permits an action without human review. `REQUIRE_APPROVAL` pauses it for an operator. `DENY` blocks an unsafe or unsubscribed-contact action. `KILL_SWITCH` pauses routing and delivery. Agents cannot override these decisions.
+`AUTO` permits routine work without human review. `REQUIRE_APPROVAL` pauses contract sending for human review. `DENY` blocks unsafe/unsubscribed contact, commercial commitments in routine messages and standalone agent pricing changes. `KILL_SWITCH` pauses routing and delivery. Agents cannot override these decisions.
 
 ## Operations and recovery
 
@@ -145,3 +147,4 @@ The [deployment guide](docs/deployment.md) covers the non-root container, proces
 - [Production operations](docs/production.md)
 - [Deployment and native integrations](docs/deployment.md)
 - [Local-only sandbox](docs/local-sandbox.md)
+- [Automation and human contract review](docs/automation.md)

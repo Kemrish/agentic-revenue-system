@@ -19,6 +19,8 @@ Date: 2026-10-15. Scope: implementation, local verification and isolated simulat
 
 ## Verified locally
 
+Autonomy update (2026-10-16): routine first-touch and bounded follow-ups now execute automatically. The human edits sensitive contract fields in a versioned UI and approves the regenerated exact document. New checks cover stale edits/approvals, post-approval signer mutation, missing human authorization, commercial claims in routine emails, follow-up caps/cancellation, legacy routine-gate migration and a continuous-worker E2E with exactly one commercial approval. Production and provider release gates below still apply.
+
 - Automated suite includes actual Edge navigation/review/rejection/delivery behavior, both-segment workflows, consent/guardrails, durable retries/leases, native signature checks, exact artifacts, isolated package paths, backup/restore and readiness checks.
 - The native-callback local acceptance test reaches closed_won for brand and publisher using test-only providers and model responses. It makes no external sends.
 - Production Docker image builds successfully with hash-checked runtime dependencies. An isolated network-disabled, read-only container validates both bundled segment packs and passes `pip check`.

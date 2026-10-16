@@ -24,6 +24,8 @@ Trigger → durable event → orchestrator → agent or skill
 
 The orchestrator owns deal state and stage transitions. Agents interpret unstructured information and propose structured results. Python code owns guarantees.
 
+The current autonomy policy makes routine processing and delivery automatic. The only normal human checkpoint is contract editing/review of sensitive terms and explicit authorization of the exact document revision. Humans do not approve individual routine emails or click delivery after contract approval. Price changes cannot be delegated to agents. Safety denials, recipient controls, consent, capped follow-ups and the emergency stop remain deterministic gates. See [automation policy](automation.md).
+
 ## 3. System diagram
 
 ```text

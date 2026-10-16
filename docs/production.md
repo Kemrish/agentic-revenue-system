@@ -10,12 +10,12 @@ For the production profile, native provider endpoints, exact-document e-signatur
 |---|---|---|
 | Operator UI/API | `python -m revenue_system.cli ui` | Review exact messages/documents, approve or reject, curate lessons, inspect queues and audit records |
 | Signed event receiver | `python -m revenue_system.cli webhooks` | Authenticate normalized webhook JSON, validate it, and durably insert an event |
-| Event worker | `python -m revenue_system.cli worker` | Consume events, call agents, apply state transitions, process SLA timers, retry failures |
-| Worker with delivery | `python -m revenue_system.cli worker --deliver` | Also send permitted outbox actions through configured adapters |
+| Automatic event/delivery worker | `python -m revenue_system.cli worker` | Consume events, call agents, apply transitions, process bounded follow-ups/timers, deliver permitted actions and retry failures |
+| Processing-only maintenance | `python -m revenue_system.cli worker --no-deliver` | Process events without dispatching external actions |
 
 Use the same `DATABASE_URL` and segment packs in all processes. The webhook receiver acknowledges persistence, not completion of the agent workflow. The worker must run for events to progress.
 
-`worker --once` runs one event cycle. `worker --once --deliver` additionally runs one delivery cycle; its resulting delivery events are applied on the next worker cycle. `approvals deliver` also applies delivery outcomes before exiting.
+`worker --once` processes events, runs a delivery cycle and applies delivery acknowledgements before exiting. `worker --once --no-deliver` never dispatches actions. `--deliver` remains an explicit synonym for the default. The continuous worker resumes after the single contract review checkpoint without another operator delivery step. `approvals deliver` remains an optional maintenance command.
 
 ## Configuration
 
@@ -66,7 +66,7 @@ python -m revenue_system.cli worker --once
 python -m revenue_system.cli ui
 ```
 
-Import validates every record and segment before inserting any event. Reimporting the same lead ID returns a duplicate. The worker scores the lead, retrieves active lesson statements, drafts first-touch outreach, and routes it through policy. Imported metadata never selects the action type or bypasses the autonomy rules.
+Import validates every record and segment before inserting any event. Reimporting the same lead ID returns a duplicate. The worker scores the lead, retrieves active lessons, drafts non-commercial first-touch outreach, and automatically queues/delivers it for every tier when policy permits. Imported metadata never selects the action type or bypasses the autonomy rules. Prices, discounts, budgets and commitments are forbidden in unattended routine messages by prompt plus conservative deterministic checks; this is a backstop, not a semantic/legal classifier guarantee.
 
 A second `lead.created` event for an existing lead does not rewind its stage, reset its consent flags, or send another first-touch draft. A future CRM-update event should have a separate, explicit update contract.
 

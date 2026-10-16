@@ -76,7 +76,7 @@ python -m revenue_system.cli deals link-transcript <deal-id> <transcript-id>
 python -m revenue_system.cli deals terms <deal-id> --file commercial-terms.json
 ```
 
-Commercial terms must explicitly contain `legal_entity`, positive `budget`, ISO `start_date`/`end_date`, and positive line-item amounts summing to the budget. They are validated and audited before use; the LLM cannot replace these values. Set terms before the transcript is processed. Existing proposals/contracts cannot be changed by this command. Reprocessed transcript notifications require manual review and cannot silently replace previously proposed commercial actions.
+Commercial terms must explicitly contain `legal_entity`, positive `budget`, ISO dates and positive line items summing exactly to the budget. USD values allow at most two decimal places. Supplied terms are validated and audited; the LLM cannot replace them. If absent, the workflow still creates a human contract review with missing values, not invented prices. Fill/edit them in the dashboard, save the regenerated preview and approve that revision. The CLI `deals terms` command remains an optional pre-proposal input; it does not change an existing proposed/approved contract. Reprocessed transcript notifications cannot silently replace previously proposed commercial actions.
 
 ### Dropbox Sign
 
@@ -122,10 +122,10 @@ The continuous worker updates a heartbeat. `production monitor` exits nonzero fo
 
 1. Use the dedicated empty production database and real secrets/domains, not sandbox values. Run local preflight, dependency checks and the automated suite.
 2. Verify HTTPS externally and check that unsigned/tampered callbacks are rejected. Register only the native callback URLs documented above.
-3. Import one owned/authorized CRM contact with evidence-backed scoring fields. Confirm its score, proposal, review details and audit trail.
-4. Review the recipient/message, permit only your controlled destination, then explicitly arm side effects and clear the kill switch. Verify provider ID and actual inbox receipt.
+3. Import one owned/authorized CRM contact with evidence-backed scoring fields. Confirm its score, routine non-commercial message and audit trail. There is no routine email approval gate.
+4. Permit only your controlled destination, then explicitly arm side effects and clear the kill switch. The worker delivers automatically by default. Verify provider ID and actual inbox receipt. Use `--no-deliver` for a processing-only dry run.
 5. Reply through the verified receiving domain and confirm native webhook intake, correlation and engagement.
-6. Supply commercial terms and link a real Fireflies transcript. Confirm the exact contract fields, signer, DOCX and fingerprint. If no production e-sign plan exists, stop that path at reviewed proposal; do not mark it signed.
+6. Link a real Fireflies transcript. At the single human contract checkpoint, supply/edit sensitive terms and signer, save and review the regenerated DOCX, then approve its exact revision/fingerprint. The worker continues without a separate delivery click. Without production e-sign access, stop at reviewed proposal; never mark it signed artificially.
 7. If e-sign is enabled, sign the actual document and verify remote completed state plus the matching callback before closed_won.
 8. Exercise denial/unsubscribe, rejection with a reason, emergency pause, provider failure/retry, and restore/restart recovery. Capture evidence without exposing customer data or secrets.
 

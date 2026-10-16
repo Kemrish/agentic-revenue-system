@@ -61,7 +61,7 @@ Policy has four outcomes:
 | `DENY` | Unsafe or unsubscribed-contact action is blocked |
 | `KILL_SWITCH` | Global emergency control pauses routing and delivery |
 
-Tier-A first-touch outreach, pricing changes, and contract sends require human approval. Unsubscribe state is checked both when proposing contact actions and when delivering previously queued work. Suspicious inbound instructions are flagged rather than executed.
+Routine outreach is automatic for every tier. The sole normal human checkpoint is contract review: edit sensitive prices and legal/commercial terms, inspect the regenerated document, and approve the exact revision. Standalone agent pricing changes are denied. Delivery then resumes automatically. Unsubscribe state is checked both when proposing contact and when delivering queued work; suspicious inbound content quarantines contact rather than becoming instructions.
 
 ## Operational workflow
 

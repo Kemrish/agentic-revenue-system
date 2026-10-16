@@ -20,8 +20,8 @@
 2. A worker acquires a database lease for the event.
 3. The orchestrator invokes the applicable agent and deterministic skills.
 4. State changes, action routing, audit records, and event acknowledgement commit together.
-5. Low-risk work enters the outbox; high-risk work awaits a human decision.
-6. A delivery process claims permitted work, rechecks safety/consent, and calls the configured provider.
+5. Routine outreach enters the outbox automatically. Contract drafts, including drafts missing sensitive terms, enter the single human edit/review checkpoint.
+6. The worker delivers automatically by default, rechecking safety/consent and immutable human authorization for contracts. Processing-only maintenance uses `--no-deliver`.
 7. Provider evidence and an `action.delivered` event are committed with sent status.
 8. Delivery and verified signature events advance the deal through guarded stages.
 
@@ -29,7 +29,9 @@ Models run before business writes where possible. Expired claims cannot acknowle
 
 ## Boundaries
 
-The webhook receiver accepts normalized internal contracts rather than arbitrary native provider payloads. External gateways must verify provider-specific signatures and map identifiers before signing the normalized request. Agents propose content; they do not own approvals or delivery.
+Native `/providers/*` endpoints verify supported vendor signature schemes and durably enqueue notifications for worker-side fetching/correlation. The `/webhooks/*` interface remains a separately signed normalized contract for trusted gateways. Agents propose content; they never own approvals, pricing authority or external delivery.
+
+`governance/contract_review.py` owns structured human edits, deterministic document regeneration, immutable revision snapshots and stale-edit/approval protection. A contract outbox payload carries authorization for its exact reviewed version; delivery checks it against the persisted approved record. Routine messages cannot carry commercial negotiations. Bounded follow-ups stop after a reply. Pending legacy routine reviews are re-evaluated under current policy without fabricating human approval; actual rejections are never revived.
 
 Brand and publisher packs supply scoring weights, qualification fields, messaging, contract templates, and stage SLAs. Tests exercise both segments through the same lead-to-signature workflow. Non-live integration modes fail explicitly; test doubles are injected by tests only.
 
