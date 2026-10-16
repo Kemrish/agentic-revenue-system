@@ -3,7 +3,7 @@
 An AI-assisted revenue operations application. Agents interpret leads, replies, and call transcripts and return typed proposals. Python code owns scoring, stage transitions, approvals, delivery, consent checks, and audit records.
 
 ```text
-Import / signed gateway → durable event → worker → agent / deterministic skill
+Import / verified provider → durable event → worker → agent / deterministic skill
                                                 ↓
                               policy → approval or outbox → provider
                                                 ↓
@@ -14,15 +14,27 @@ The application supports brand and publisher workflows through YAML segment pack
 
 ## Requirements and installation
 
-Python 3.12 or later is required.
+Python 3.12 or later is required. The locked production environment and container use Python 3.14.
 
 ```powershell
-python -m pip install -e ".[dev]"
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install --require-hashes -r requirements.lock
+.venv\Scripts\python.exe -m pip install -e ".[dev,browser]"
 Copy-Item .env.example .env
 python -m revenue_system.cli validate-packs
 ```
 
-If `.env` already exists, preserve its values and add only missing settings. Fill the credentials and operator password before starting live services. Secrets, databases, generated documents, and runtime artifacts must not be committed.
+If `.env` already exists, preserve it. `production init` creates a separate ignored `.env.production`, generates operator/internal secrets, and initializes an empty paused database without overwriting existing data. Secrets, databases and runtime artifacts must not be committed.
+
+```powershell
+.venv\Scripts\python.exe -m revenue_system.cli production init
+$env:ARS_ENV_FILE=".env.production"
+.venv\Scripts\python.exe -m revenue_system.cli production preflight
+```
+
+Review `.env.production` privately, supply the missing deployment/provider settings, and select it in every new service terminal. Existing process environment variables override file values. Preflight is deliberately red until the real requirements are met; it makes no provider calls. See [deployment and integrations](docs/deployment.md).
+
+No public domain yet? The optional [local sandbox](docs/local-sandbox.md) exercises signed callbacks and the UI using isolated test doubles. It never sends real messages and is excluded from production builds.
 
 ## Configuration
 
@@ -49,11 +61,11 @@ LIVE_SIDE_EFFECTS_ENABLED=false
 
 Integrations must be individually enabled. Non-live settings disable the corresponding operation and return an explicit error; they do not return synthetic delivery IDs or canned model results. `LIVE_SIDE_EFFECTS_ENABLED=true` explicitly permits configured live mail/e-signature calls. Mail remains restricted to `MAIL_ALLOWED_RECIPIENTS`.
 
-E-signature uses `ESIGN_DOCUMENT_URL`, signer settings, and its own API key. Keep `ESIGN_TEST_MODE=true` until the real commercial workflow and provider plan have been verified. Ensure the exact approved document is the artifact sent for signature; see the release limitations in the operations runbook.
+E-signature uploads the exact reviewed per-deal DOCX, not a shared document URL. Approval and delivery verify its SHA-256 fingerprint and signer; `ESIGN_ALLOWED_RECIPIENTS` restricts destinations. Legacy URL/global signer settings are not used as substitutes. Leave `ESIGN_MODE=test` to disable the integration when you do not have a paid production API plan. Production live e-sign requires `ESIGN_TEST_MODE=false` and verified provider access.
 
 ## Running the system
 
-Run each process from the project root, using the same database configuration:
+Run each process with the same selected configuration and database. Installed wheels include both packs, their templates, prompts and UI assets; launching from the repository root is not required.
 
 ```powershell
 # Terminal 1: operator dashboard (http://127.0.0.1:8000)
@@ -72,10 +84,11 @@ Production dashboard access requires a configured password. Use HTTPS at a trust
 
 ## Lead intake and operation
 
-Real lead data enters through a JSON import or a signed, normalized webhook. A lead needs a stable `lead_id`, configured `segment`, `company_name`, and `contact_name`; supply `email` and fit/intent/engagement evidence for outreach and scoring.
+Real lead data enters through JSON import, an explicit HubSpot contact import, or a verified native HubSpot contact-creation webhook. The worker fetches the contact and maps configured CRM properties. A lead needs a stable `lead_id`, configured `segment`, `company_name`, and `contact_name`; supply `email` and fit/intent/engagement evidence for outreach and scoring. The system does not scrape or discover companies independently.
 
 ```powershell
 python -m revenue_system.cli ingest --file leads.json
+python -m revenue_system.cli import-contact <numeric-hubspot-contact-id>
 python -m revenue_system.cli worker --once
 ```
 
@@ -119,7 +132,9 @@ Browser tests require installed Microsoft Edge. Tests use isolated databases and
 
 ## Deployment scope
 
-The [production runbook](docs/production.md) documents configuration, webhook payloads, retries, recovery, backups, and remaining release work. Native provider webhook verification/mapping, full CRM synchronization, exact-document signature delivery, HTTPS, supervision, and monitoring must be verified for the deployment. SQLite supports a bounded deployment sharing one local database; multi-host scale needs a database and queue migration.
+Native HubSpot V3, Resend, Fireflies V2 and Dropbox Sign ingress is implemented. The worker retries provider lookups, correlates replies and transcripts to deals, and verifies signature completion against provider state. Optional CRM write-back updates configured score/stage properties through the outbox; it is not bidirectional CRM synchronization. Ambiguous provider acceptance is parked for operator reconciliation rather than silently treated as success.
+
+The [deployment guide](docs/deployment.md) covers the non-root container, process supervision, HTTPS template, backups, monitoring and the live acceptance checklist. Local tests and mock callbacks do not prove vendor credentials, real DNS/TLS, delivery, or paid-plan access. SQLite supports a bounded single-host deployment; multi-host scale needs a database and queue migration.
 
 ## Documentation
 
@@ -128,3 +143,5 @@ The [production runbook](docs/production.md) documents configuration, webhook pa
 - [Implementation](docs/implementation.md)
 - [System overview](docs/system-overview.md)
 - [Production operations](docs/production.md)
+- [Deployment and native integrations](docs/deployment.md)
+- [Local-only sandbox](docs/local-sandbox.md)

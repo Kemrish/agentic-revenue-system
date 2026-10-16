@@ -2,6 +2,8 @@
 
 This runbook describes the implemented service boundaries and the work still required for a real deployment. The application remains a modular Python application with SQLite persistence; this work does not add a distributed broker or microservices.
 
+For the production profile, native provider endpoints, exact-document e-signature, container/HTTPS setup and the release checklist, read [Deployment and native integrations](deployment.md). Optional local mocks are documented separately in [Local sandbox](local-sandbox.md); they are excluded from production builds.
+
 ## Processes and ownership
 
 | Process | Command | Responsibility |
@@ -21,7 +23,7 @@ Copy the variable names in `.env.example` into your deployment's secret/configur
 
 ```env
 APP_ENV=production
-DATABASE_URL=sqlite:///./revenue_system.db
+DATABASE_URL=sqlite:///./data/production.db
 DASHBOARD_USERNAME=operator
 DASHBOARD_PASSWORD=<strong unique operator password>
 WEBHOOK_SECRET=<separate random shared secret for your ingress gateway>
@@ -79,11 +81,11 @@ Compute the lowercase hexadecimal SHA-256 HMAC over the exact HTTP body bytes us
 | `/webhooks/hubspot` | `lead.created` | `lead_id` (or `objectId`), `segment`, `company_name`, `contact_name`; optional email and 0–100 scoring features |
 | `/webhooks/mail` | `reply.received` | `deal_id`, `text` |
 | `/webhooks/fireflies` | `transcript.ready` | `deal_id`, `transcript`; optional transcript ID and explicit commercial terms |
-| `/webhooks/esign` | `contract.signed` | `deal_id`; include `provider_id` to match the delivered signature request |
+| `/webhooks/esign` | `contract.signed` | `deal_id` and `provider_id` matching the delivered signature request |
 
 Missing/invalid signatures are refused; an unconfigured secret returns 503. Invalid object shapes, unsupported segments, invalid scoring values, and over-limit bodies are refused before persistence. Duplicate event IDs return `duplicate`. Store the original provider event ID for auditing and do not generate a new ID on redelivery.
 
-Signature events close only a deal in contracting with a recorded sent contract. When a provider reference is supplied, it must match that deal's delivery evidence. The gateway must forward only a verified completed-signature event, not a generic envelope update.
+Signature events close only a deal in contracting with a recorded sent contract and a matching provider reference. The trusted internal gateway must forward only a verified completed-signature event. Native providers instead use `/providers/{provider}`; the e-sign resolver additionally queries the provider for completed state.
 
 ## Durability, retries, and recovery
 
@@ -131,9 +133,9 @@ Browser verification requires Playwright and Microsoft Edge (`pip install -e ".[
 ## Release limitations and remaining deployment work
 
 - SQLite is suitable for a bounded deployment sharing one local database. Use PostgreSQL and an appropriate job queue for sustained concurrent writes or multiple application hosts; do not share a SQLite file through an arbitrary network filesystem.
-- A gateway must implement and verify each native provider webhook contract. The existing HubSpot adapter is a narrow property-update boundary, not a full CRM synchronization service. Fireflies retrieval must be wired to a verified provider event and tested against the actual API.
-- Dropbox Sign currently references a configured document URL. Before real commercial use, ensure the exact approved document is the uploaded/signed artifact; the rendered text is not automatically published to that URL. Confirm plan capabilities and the completed-signature callback end to end.
-- Basic authentication supplies one operator identity, not SSO, role-based authorization, or a multi-user permission system. Terminate HTTPS, protect docs/metrics as required, configure process supervision, backups/restore drills, secrets storage/rotation, and error alerts before public exposure.
+- Native HubSpot V3, Resend, Fireflies V2 and Dropbox Sign verification/mapping is implemented alongside the trusted normalized gateway. Provider account configuration, scopes and actual live acceptance remain deployment responsibilities. Optional CRM write-back updates configured score/stage properties, not full bidirectional synchronization.
+- Dropbox Sign uploads the exact reviewed per-deal DOCX after fingerprint/signer validation. Legacy URL-only contracts fail closed. Keep the integration disabled without appropriate production plan access; confirm actual signing and callbacks before commercial use.
+- Basic authentication supplies one operator identity, not SSO, role-based authorization, or a multi-user permission system. API documentation endpoints are disabled. Compose restart policies, a reverse-proxy template, non-overwriting backup/restore commands and a heartbeat/queue monitor are supplied; install, configure and verify the actual TLS service, scheduled/off-host backups and alert routing before public exposure.
 - Lead research/feature extraction and CRM write-back remain explicit integration work. Imported scoring features must come from an identified evidence source; the application does not independently research external companies.
 
 These boundaries prevent the local hardening tests from being mistaken for a completed vendor-certified production deployment.
