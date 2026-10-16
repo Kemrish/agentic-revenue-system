@@ -71,3 +71,26 @@ def test_monitor_detects_missing_worker_and_dead_events(tmp_path):
     store.connection.commit()
     assert not operational_status(s)["healthy"]
     store.connection.close()
+
+
+def test_monitor_refuses_to_create_a_missing_database(tmp_path):
+    from revenue_system.operations import operational_status
+    missing = tmp_path / "missing.db"
+    result = operational_status(Settings(database_url=f"sqlite:///{missing}"))
+    assert not result["healthy"] and not missing.exists()
+
+
+def test_cli_emergency_pause_needs_no_working_provider_configuration(tmp_path, monkeypatch):
+    from typer.testing import CliRunner
+
+    from revenue_system.cli import app
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "")
+    database = tmp_path / "emergency.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{database}")
+    result = CliRunner().invoke(app, ["kill-switch", "--enabled"])
+    assert result.exit_code == 0, result.output
+    store = SQLiteStore(f"sqlite:///{database}")
+    assert store.flag_enabled("global_kill_switch")
+    store.connection.close()

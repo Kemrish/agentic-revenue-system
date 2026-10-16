@@ -134,9 +134,13 @@ def snapshot(source: Path, destination: Path) -> None:
 
 def operational_status(s: Settings, max_worker_age: int = 600) -> dict:
     path = database_path(s.database_url)
-    with sqlite3.connect(path.as_uri() + "?mode=ro", uri=True) as db:
-        row = db.execute("SELECT seen_at FROM service_heartbeats WHERE service='worker'").fetchone()
-        fresh = row is not None and (datetime.now(timezone.utc) - datetime.fromisoformat(row[0])).total_seconds() <= max_worker_age
-        dead = db.execute("SELECT COUNT(*) FROM events WHERE status='dead'").fetchone()[0]
-        failed = db.execute("SELECT COUNT(*) FROM outbox WHERE status='failed'").fetchone()[0]
+    try:
+        with sqlite3.connect(path.as_uri() + "?mode=ro", uri=True) as db:
+            row = db.execute("SELECT seen_at FROM service_heartbeats WHERE service='worker'").fetchone()
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(row[0])).total_seconds() if row else None
+            fresh = age is not None and 0 <= age <= max_worker_age
+            dead = db.execute("SELECT COUNT(*) FROM events WHERE status='dead'").fetchone()[0]
+            failed = db.execute("SELECT COUNT(*) FROM outbox WHERE status='failed'").fetchone()[0]
+    except (sqlite3.Error, ValueError):
+        return {"healthy": False, "worker_fresh": False, "reason": "Database is unavailable or needs schema initialization; no changes made"}
     return {"healthy": fresh and dead == 0 and failed == 0, "worker_fresh": fresh, "dead_events": dead, "failed_deliveries": failed}

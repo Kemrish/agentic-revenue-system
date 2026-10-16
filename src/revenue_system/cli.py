@@ -33,7 +33,13 @@ def validate_packs() -> None:
 @app.command()
 def kill_switch(enabled: bool = typer.Option(..., "--enabled/--disabled")) -> None:
     """Enable or disable the global action kill switch."""
-    build_container().store.set_flag("global_kill_switch", enabled)
+    # Emergency control must work even if provider configuration is incomplete.
+    store = SQLiteStore(Settings().database_url)
+    try:
+        store.set_flag("global_kill_switch", enabled)
+        store.audit("human:cli", "kill_switch_changed", f"enabled={enabled}")
+    finally:
+        store.connection.close()
     typer.echo(f"global kill switch={'on' if enabled else 'off'}")
 
 
